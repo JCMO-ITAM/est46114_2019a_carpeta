@@ -1,2 +1,3 @@
-# est46114_2019a_carpeta
-Metodos Multivariados y Datos Categoricos
+# EST-46114 Metodos Multivariados y Datos Categoricos
+
+*Primavera 2019*
