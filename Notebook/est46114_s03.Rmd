@@ -1,0 +1,400 @@
+---
+title: EST-46114 Métodos Multivariados y Datos Categóricos
+subtitle: Sesion 03 - Inferencia en la Distribucion Gaussiana Multivariada - Parte 1
+author: Juan Carlos Martinez-Ovando
+institute: Maestria en Ciencia de Datos
+titlegraphic: /svm-r-sources/ITAM2016.png
+fontsize: 10pt
+output:
+ beamer_presentation:
+    template: ~/svm-r-sources/svm-latex-beamer.tex
+    keep_tex: true
+# toc: true
+    slide_level: 2
+ ioslides_presentation:
+    smaller: true
+    logo: ~/svm-r-sources/ITAM2016.png
+make149: true
+---
+
+<style>
+slides > slide.backdrop {
+  background: white;
+  border-bottom: 0px;
+  box-shadow: 0 0 0;
+}
+
+
+slides > slide {
+  font-family: 'Open Sans', Helvetica, Arial, sans-serif;
+  border-bottom: 3px solid  #F66733;
+  box-shadow:  0 3px 0 #522D80;
+
+}
+
+.title-slide hgroup h1 {
+  color: #522D80;
+}
+
+h2 {
+
+  color: #522D80;
+}
+
+slides > slide.dark {
+  background: #522D80 !important;
+  border-bottom: 0;
+  box-shadow: 0 0 0;
+}
+
+.segue h2 {
+  color: white;
+}
+
+slides > slide.title-slide {
+  border-bottom: 0;
+  box-shadow: 0 0 0;
+}
+
+ol, ul {
+
+padding-bottom: 10px;
+
+}
+
+</style>
+
+
+Objetivos
+---
+
+* Revisaremos el procedimiento de estimacion puntual frecuentista y bayesiano de los parmetros de la distribucion gaussiana multidimensional.
+
+* Revisaremos como hacer prediccion con ambos enfoques inferenciales.
+
+* Implicaciones inferenciales pertinentes en ambos escenarios.
+
+
+Clase de distribuciones
+---
+
+Como mencionamos, cuando nos referimos al modelo gaussiano (y a cualquier modelo de probabilidad) nos estamos refiriendo en realidad a clases modelos, $\mathcal{F}$, dadas por
+$$
+\mathcal{F} = \{F(\cdot|\theta):F(\cdot|\theta) \text{ es una medida de probabilidad para todo }\theta \},
+$$
+con $\theta \in \Theta$ espacio parametral y *soporte* $\mathcal{X}$.
+
+*Usualmente se supone el cumplimiento de* **condiciones de regularidad.**
+
+**Observacion**
+
+* Cada valor de $\theta$ define un modelo de probabilidad $F(\cdot|\theta)$.
+
+Clase gaussiana de distribuciones
+---
+
+Para $X=(X_1,\ldots,X_p)$ vector $p$-dimensional, suponemos que es *modelado por la clase de distribuciones gaussianas* $\mathcal{F}$ si su funcion de densidad es,
+$$
+f(x|\boldsymbol{\mu},\boldsymbol{\lambda})
+=
+(2\pi)^{-p/2} |\boldsymbol{\Lambda}|^{1/2}\exp\left\{-\frac{1}{2}(x-\boldsymbol{\mu})'\Lambda(x-\boldsymbol{\mu})\right\},
+$$
+para todo $x$ en $\mathcal{X}$, siendo $\boldsymbol{\Lambda}$ la matrix de precision.
+
+Datos
+---
+
+Consideremos ahora que contamos con $n$ datos recolectados, 
+$$
+\text{datos}=\{x_1,\ldots,x_p\},
+$$
+con $x_j$s vectores $p$-dimensionales. Tipicamente renglones de una matriz de datos, e.g.
+
+```{r}
+data(swiss)
+swiss[1,]
+```
+
+**Inferencialmente** buscaremos el modelo particular en $\mathcal{F}$ que *sea mas compatible* con los datos.
+
+Dos paradigmas
+---
+
+A. **Frecuentista**
+
+B. **Bayesiano**
+
+Ambos basados en el `principio de verosimilitud`, i.e. la compatibilidad de los datos y los modelos en $\mathcal{F}$ se mide con la funcion
+$$
+l(\boldsymbol{\mu},\boldsymbol{\Lambda}|\text{datos}) 
+= 
+f(x_1,\ldots,x_n|\boldsymbol{\mu},\boldsymbol{\Lambda}).
+$$
+Es decir,
+$$
+l(\boldsymbol{\mu},\boldsymbol{\Lambda}|\text{datos}) 
+= 
+\begin{cases}
+\prod_{i=1}^{n}f(x_i;\boldsymbol{\mu},\boldsymbol{\Lambda}) & \text{, (frecuentista)}, \\
+\prod_{i=1}^{n}f(x_i|\boldsymbol{\mu},\boldsymbol{\Lambda}) & \text{, (bayesiano)}  . \\
+\end{cases}
+$$
+
+Estimacion frecuentista
+---
+
+El *modelo mas compatible*, bajo el enfoque frecuentista, es 
+$$
+F(\cdot|\boldsymbol{\mu}^*,\boldsymbol{\Lambda}^*),$$
+tal que
+$$
+\boldsymbol{\mu}^*,\boldsymbol{\Lambda}^* = 
+\arg\max_{\boldsymbol{\mu},\boldsymbol{\Lambda}} l(\boldsymbol{\mu},\boldsymbol{\Lambda}|\text{datos}).
+$$
+
+Es decir,
+\begin{eqnarray}
+\boldsymbol{\mu}^*  & = &  \bar{x}, \nonumber \\
+\boldsymbol{\Lambda}^* & = & S^{-1}, \nonumber
+\end{eqnarray}
+con $S=\sum_{i=1}^{n}(x_i-\bar{x})(x_i-\bar{x})'.$
+
+*Se obtiene de manera analoga al caso univariado (revisen las lecturas complementarias).*
+
+Estimacion bayesiana I
+---
+
+En el caso bayesiano, se considera que junto con los `datos` se dispone de fuentes complementarias de informacion reflejadas en la `distribucion prior` con soporte en la clase de modelos $\mathcal{F}$ (a.k.a. espacio parametral $\Theta$), con densidad,
+$$
+q(\boldsymbol{\mu},\boldsymbol{\Lambda}|\text{informacion complementaria}).
+$$
+
+* Como la verosimilitud, la funcion $q(\cdot)$ sirve para cuantificar **grados de acertividad** que *creamos convenientes.*
+
+* En un momento veremos formas de especificar $q(\cdot)$. 
+
+
+Estimacion bayesiana II
+---
+
+La informacion consolidad de los `datos` y `complementaria` se **consolida** en el producto
+$$
+l(\boldsymbol{\mu},\boldsymbol{\Lambda}|\text{datos})
+\times
+q(\boldsymbol{\mu},\boldsymbol{\Lambda}|\text{complementaria}).
+$$
+
+Estimacion bayesiana II
+---
+Generalmente, resulta que este producto es una medida de probabilidad para $(\boldsymbol{\mu},\boldsymbol{\Lambda})$, con densidad dada por
+\begin{eqnarray}
+q(\boldsymbol{\mu},\boldsymbol{\Lambda}|\text{complementaria})
+& \propto & 
+l(\boldsymbol{\mu},\boldsymbol{\Lambda}|\text{datos})
+q(\boldsymbol{\mu},\boldsymbol{\Lambda}|\text{complementaria}),
+\nonumber
+\end{eqnarray}
+siendo constante de normalizacion,
+$$
+\int \int l(\boldsymbol{\mu},\boldsymbol{\Lambda}|\text{datos})
+q(\boldsymbol{\mu},\boldsymbol{\Lambda}|\text{complementaria})\text{d}\boldsymbol{\mu}\text{d}\boldsymbol{\Lambda}.
+$$
+
+
+Priors
+---
+
+**Difusa (no informativa)**
+
+$$
+q(\boldsymbol{\mu},\boldsymbol{\Lambda})\propto |\boldsymbol{\Lambda}|^{1/2}.
+$$
+
+
+**Conjugada (parcialmente informativa)**
+
+$$
+q(\boldsymbol{\mu},\boldsymbol{\Lambda}) =
+N(\boldsymbol{\mu}|\boldsymbol{m}_0,s_0\boldsymbol{\Lambda})
+W(\boldsymbol{\Lambda}|a_0,\boldsymbol{B}_0),
+$$
+donde $s_0$ y $a_0$ son escalares positivos, $\boldsymbol{m}_0$ es un vector $p$-dimensional y $\boldsymbol{B}_0$ es una matriz simetrica $p\times p$-dimensional.
+
+* $N(\boldsymbol{\mu}|\boldsymbol{m}_0,s_0\boldsymbol{\Lambda})$ - Densidad gaussiana $p$-dimensional
+
+* $W(\boldsymbol{\Lambda}|a_0,\boldsymbol{B}_0)$ - Densidad Wishart $p$-dimensional (vean lecturas complementarias)
+
+*Los valores* $(\boldsymbol{m}_0,s_0,a_0,\boldsymbol{B}_0)$ *se conocen como* **hiperparametros** *y reflejan (de alguna forma) la* `informacion complementaria` *a los datos.*
+
+Estimacion bayesiana III
+---
+
+Como mencionamos, el aprendizaje bayesiano con `datos` y `complemento` se consolida con $q(\boldsymbol{\mu},\boldsymbol{\Lambda}|\text{datos y complemento})$.
+
+**Caso conjugado:**
+$$
+q(\boldsymbol{\mu},\boldsymbol{\Lambda}|\text{datos y complemento})
+= 
+N(\boldsymbol{\mu}|\boldsymbol{m}_n,s_n\boldsymbol{\Lambda})
+W(\boldsymbol{\Lambda}|a_n,\boldsymbol{B}_n),
+$$
+con,
+\begin{eqnarray}
+\boldsymbol{m}_n & = & \frac{s_0\boldsymbol{m}_0+n\bar{x}}{s_n}, \nonumber \\
+s_n & = & s_0 +n, \nonumber \\
+a_n & = &  a_0 + \frac{n}{2}, \nonumber \\
+\boldsymbol{B}_n & = & \boldsymbol{B}_0 + \frac{n}{2} \left(S + \frac{s_0}{s_n}(\bar{x}-\boldsymbol{m}_0)(\bar{x}-\boldsymbol{m}_0)'\right), \nonumber
+\end{eqnarray}
+donde,
+$$
+S = \frac{1}{n}\sum_{i=1}^{n}(x_i-\bar{x})(x_i-\bar{x})'.
+$$
+
+```{r posterior, include=FALSE}
+data <- swiss
+
+a0 <- 1
+s0 <- 1
+m0 <- matrix(0,ncol=1,nrow=6)
+B0 <- diag(1,ncol=6,nrow=6) 
+
+gaussian.posterior <- function(data,m0,s0,a0,B0){
+  xbar <- as.matrix(colMeans(data))
+  S <- cov(swiss)
+  n <- nrow(swiss)
+  p <- ncol(swiss)
+  # Posterior hiperparameters
+  sn <- s0 + n
+  an <- a0 + n/2
+  mn <- (s0*m0 + n*xbar)/sn
+  Bn <- B0 + (n/2)*(S + (s0/sn)*(xbar-m0)%*%t(xbar-m0))
+  # Output
+  output <- list(mn,sn,an,Bn)
+  return(output)
+}
+
+output <- gaussian.posterior(data,m0,s0,a0,B0)
+```
+
+Estimacion bayesiana IV
+---
+
+**Para** $\boldsymbol{\mu}$
+
+$$
+\boldsymbol{\mu}^{**} = \boldsymbol{m_n}.
+$$
+
+**Para** $\boldsymbol{\Lambda}$
+
+$$
+\boldsymbol{\Lambda}^{**} = \boldsymbol{B_n}^{-1}.
+$$
+
+* *Salvo que la prior sea suficientemente distinta de la verosimilitud, $\boldsymbol{\mu}^{*}$ y $\boldsymbol{\mu}^{**}$ no deberan diferir significativamente.* 
+
+* *Lo mismo aplica a $\boldsymbol{\Lambda}$.*
+
+Estimacion bayesiana IV
+---
+
+**Para** $\boldsymbol{\mu}$
+
+$$
+\boldsymbol{\mu}^{**} = \boldsymbol{m_n}.
+$$
+
+**Para** $\boldsymbol{\Lambda}$
+
+$$
+\boldsymbol{\Lambda}^{**} = \boldsymbol{B_n}^{-1}.
+$$
+
+* *Salvo que la prior sea suficientemente distinta de la verosimilitud, $\boldsymbol{\mu}^{*}$ y $\boldsymbol{\mu}^{**}$ no deberan diferir significativamente.* 
+
+* *Lo mismo aplica a $\boldsymbol{\Lambda}$.*
+
+Frecuentista vs bayesiano I
+---
+
+**La distincion del paradigma bayesiano reside en:**
+
+a. Capacidad de incorporar `informacion complementaria`
+
+b. Cuantificar probabilisticamente diferentes modelos probabilisticos consolidando informacion de `datos` y `complemento`
+
+
+Frecuentista vs bayesiano I
+---
+
+Usando `gaussian.posterior`
+```{r estimadores2, echo=TRUE}
+# Frecuentista
+mstar <- colMeans(data)
+Lstar <- solve(cov(swiss))
+mstar
+
+# Bayesiano
+m2star <- t(output[[1]])
+L2star <- solve(output[[4]])
+m2star
+```
+
+Frecuentista vs bayesiano II
+---
+
+*Los estimadores de las precisiones si pueden diferir (esta es una distincion muy importante).*
+
+```{r}
+Lstar[1:4,1:4]
+L2star[1:4,1:4]
+```
+
+Implicaciones inferenciales I
+--- 
+
+**Error de estimacion**
+
+*Frecuentista*
+
+`Regiones (intervalos) de confianza` - **Clases de equivalencia**
+
+
+*Bayesiano*
+
+`Regiones de credibilidad` - **No clases de equivalencia**
+
+**[Incorporen graficas de verosimilitud y posterior marginales.]**
+
+
+Ejercicios
+---
+
+1. Revisen los calculos de la distribucion posterior de $(\boldsymbol{\mu},\boldsymbol{\Lambda})$ empleando $q(\cdot)$ `difusa`.
+
+2. Consideren los datos `data(swiss)` de provincias en Suiza. La descripcion de los datos esta en esta [liga](https://stat.ethz.ch/R-manual/R-devel/library/datasets/html/swiss.html).
+
+3. Estudien la implementacion en `R` de las distribuciones Wishart, normal y Student multivariadas. Vean las siguientes ligas:
+
+[Liga Wishart](http://ugrad.stat.ubc.ca/R/library/MCMCpack/html/wishart.html)
+
+[Liga normal y t](https://cran.r-project.org/web/packages/mvtnorm/index.html)
+
+
+En la siguiente sesion
+---
+
+Revisaremos como hacer:
+
+1. Revisaremos las implicaciones de modelacion para responder problemas inferenciales espcificos sobre $\boldsymbol{\mu}$ y sobre $\boldsymbol{\Lambda}$.
+
+Lecturas complementarias
+---
+
+* Martinez-Ovando (2016) "Paradigma Bayesiano de Inferencia (Resumen de Teoria)", *Notas de clase EST-46114*. \textcolor{blue}{(De momento, no presten antencion a la descripcion de los metodos de simulacion transdimensionales.)} `est46114_s03_suplemento2.pdf`
+
+* Murphy (2007) "Conjugate Bayesian analysis of the Gaussian distribution". Mimeo. `est46114_s03_suplemento2.pdf`
+
+* Press (2005). "Applied multivariate analysis, using Bayesian and frequentist methods of inference." Dover Pub. \textcolor{blue}{(Capitulo 4.)}
+
+
