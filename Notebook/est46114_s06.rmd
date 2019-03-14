@@ -1,0 +1,401 @@
+---
+title: EST-46114 Métodos Multivariados y Datos Categóricos
+subtitle: Sesion 06 - Analisis de Componentes Principales - Parte 2/3
+author: Juan Carlos Martinez-Ovando
+institute: Maestria en Ciencia de Datos
+titlegraphic: /svm-r-sources/ITAM2016.png
+fontsize: 10pt
+output:
+ beamer_presentation:
+    template: ~/svm-r-sources/svm-latex-beamer.tex
+    keep_tex: true
+# toc: true
+    slide_level: 2
+ ioslides_presentation:
+    smaller: true
+    logo: ~/svm-r-sources/ITAM2016.png
+make149: true
+---
+
+<style>
+slides > slide.backdrop {
+  background: white;
+  border-bottom: 0px;
+  box-shadow: 0 0 0;
+}
+
+
+slides > slide {
+  font-family: 'Open Sans', Helvetica, Arial, sans-serif;
+  border-bottom: 3px solid  #F66733;
+  box-shadow:  0 3px 0 #522D80;
+
+}
+
+.title-slide hgroup h1 {
+  color: #522D80;
+}
+
+h2 {
+
+  color: #522D80;
+}
+
+slides > slide.dark {
+  background: #522D80 !important;
+  border-bottom: 0;
+  box-shadow: 0 0 0;
+}
+
+.segue h2 {
+  color: white;
+}
+
+slides > slide.title-slide {
+  border-bottom: 0;
+  box-shadow: 0 0 0;
+}
+
+ol, ul {
+
+padding-bottom: 10px;
+
+}
+
+</style>
+
+
+Objetivos
+---
+
+* Estudiaremos el procedimiento inferencial asociado con PCA (extension del SPCA).
+
+* Realizaremos una ilustracion del procedimiento inferencial.
+
+```{r loading, include=FALSE}
+#if(!require("ripa")){install.packages("ripa", dependencies=c("Depends", "Suggests"))}
+#if(!require("EBImage")){source("http://bioconductor.org/biocLite.R"); biocLite("EBImage")}
+if(!require("fields")){install.packages("fields")}
+if(!require("mnormt")){install.packages("mnormt")}
+if(!require("MCMCpack")){install.packages("MCMCpack")}
+if(!require("actuar")){install.packages("actuar")}
+if(!require("ggplot2")){install.packages("ggplot2")}
+if(!require("kernlab")){install.packages("kernlab")}
+#library("ripa")
+#library("EBImage")
+library("fields")
+library("mnormt")
+library("MCMCpack")
+library("actuar")
+library("ggplot2")
+library("kernlab")
+```
+
+Preambulo
+---
+
+PCA es usado en muchas ocaciones para producir estadisticas e indicadores oficiales, e.g.:
+
+* Estadiscas demograficas (Mexico)
+
+* Incidencia criminal (Nigeria)
+
+* Aprovechamiento escolar (Colombia, Mexico)
+
+* Habilidades sociales (Argentina)
+
+* Analisis de rendimientos financieros (Internacional)
+
+* Entre muchos otros...
+
+Motivavion
+---
+
+* Reconociendo que muchos indicadores oficiales (incluyendo los construidos con PCA), **Manski (2015)** abogo por la inclusion de `medidas de error` (a.k.a. dispersion) en la publicacion de indicadores estadisticos.
+
+* Esto reconociendo el aspecto inferencial asociado con su construccion.
+
+\textcolor{blue}{\small Revisen la rectura complementaria de esta sesion.}
+
+PCA | Recapitulacion
+---
+
+Recodremos, a partir de un conjunto de datos, matriz $\boldsymbol{X}$ de dimension $(n\times p)$, PCA se contruye a partir de la asociacion de la `estructura espectral` de $\boldsymbol{\Sigma}$, la matriz de varianzas y covarianzas subyacente a $\boldsymbol{X}$.
+
+Es decir, los componentes principales de $\boldsymbol{X}$ corresponden a la transformacion
+$$
+{c_j}_{(n\times 1)} = \boldsymbol{X}\boldsymbol{v}_j,
+$$
+para $j=1,\ldots,p$, donde 
+$$
+(e_j,\boldsymbol{v}_j)_{j=1}^{p},
+$$
+con los eigenvalores asociados con $\boldsymbol{X}$ y $\boldsymbol{\Sigma}$.
+
+PCA | Observaciones
+---
+
+* Cuando la matriz $\boldsymbol{X}$ de dimension $(n\times p)$ es una `muestra de datos`, la informacion poblacional acerca de las interacciones de las $p$ variables es incompleta.
+
+* Informacion incompleta poblacional involucra que PCA constriuido a partir de $\boldsymbol{X}$ o $\boldsymbol{\Sigma}$ sea en realidad construido a partir de $\hat{\boldsymbol{\Sigma}}$ (un estimador puntual de $\Sigma$).
+
+* Aun cuando $\boldsymbol{X}$ refiera a un censo poblacional, la estructura de codependencia entre las $p$-dimensiones de estudio es incierta (i.e. la codependencia puede no ser lineal).
+
+* En los escenarios anteriores, se descarta el aspecto temporal/dinamico del PCA implementado.
+
+PCA | Ejemplo SPCA `Swiss` 1/2
+---
+
+En el caso de los datos `Swiss`, realizamos SPCA como:
+
+```{r include=FALSE}
+if(!require("tidyverse")){install.packages("tidyverse")}
+if(!require("readr")){install.packages("readr")}
+if(!require("psych")){install.packages("psych")}
+
+library("tidyverse") 
+library("readr") 
+library("psych") 
+```
+
+```{r echo=FALSE}
+data("swiss")
+```
+
+```{r echo=FALSE}
+swiss.pca <- prcomp(swiss, scale. = TRUE)
+summary(swiss.pca)
+ls(swiss.pca)
+```
+
+```{r echo=FALSE}
+round(swiss.pca$rotation[, 1:3], 2)
+```
+
+PCA | Ejemplo SPCA `Swiss` 2/2
+---
+
+```{r}
+biplot(swiss.pca, cex = 0.4)
+```
+
+PCA | `Swiss` Inferencial 1/
+---
+
+**Planteamiento**
+Pensemos que cada renglon de la matriz $\boldsymbol{X}$ es una observacion de 
+$$
+\boldsymbol{X}_{j\cdot} \sim N_{p}(\boldsymbol{X}|\boldsymbol{\mu},\boldsymbol{\Lambda}),
+$$
+para $j=1,\ldots,n$.
+
+* Adoptamos el supuesto de `homogeneidad` e `independencia estocastica` en la enunciacion anterior.
+
+**Complementariamente**
+
+El desconocmiento acerca de $(\boldsymbol{\mu},\boldsymbol{\Lambda})$ es expresado como:
+$$
+(\boldsymbol{\mu},\boldsymbol{\Lambda}) \sim \text{N-Wi}(\boldsymbol{\mu},\boldsymbol{\Lambda}|\boldsymbol{m}_0,s_0,a_0,\boldsymbol{B}_0),
+$$
+para ciertos valores de $\boldsymbol{m}_0,s_0,a_0,\boldsymbol{B}_0$.
+
+```{r loading2, include=FALSE}
+if (require("mvtnorm") == FALSE){
+  install.packages("mvtnorm")
+}
+if (require("MASS") == FALSE){
+  install.packages("mvtnorm")
+}
+library("mvtnorm","MASS")
+```
+
+```{r posterior, include=FALSE}
+data <- swiss
+
+a0 <- 1
+s0 <- 1
+m0 <- matrix(0,ncol=1,nrow=6)
+B0 <- diag(1,ncol=6,nrow=6) 
+
+gaussian.posterior <- function(data,m0,s0,a0,B0){
+  xbar <- as.matrix(colMeans(data))
+  S <- cov(swiss)
+  n <- nrow(swiss)
+  p <- ncol(swiss)
+  # Posterior hiperparameters
+  sn <- s0 + n
+  an <- a0 + n/2
+  mn <- (s0*m0 + n*xbar)/sn
+  Bn <- B0 + (n/2)*(S + (s0/sn)*(xbar-m0)%*%t(xbar-m0))
+  # Output
+  output <- list(mn,sn,an,Bn)
+  return(output)
+}
+
+output <- gaussian.posterior(data,m0,s0,a0,B0)
+```
+PCA | `Swiss` Inferencial 2/
+---
+
+**Aprendizaje**
+
+Asi, al consolidar las `fuentes de informacion` tenemos:
+$$
+(\boldsymbol{\mu},\boldsymbol{\Lambda}|\boldsymbol{X}) \sim \text{N-Wi}(\boldsymbol{\mu},\boldsymbol{\Lambda}|\boldsymbol{m}_n,s_n,a_n,\boldsymbol{B}_n),
+$$
+con $\boldsymbol{m}_n,s_n,a_n,\boldsymbol{B}_n$ expresados analiticamente en la presentacion de la `Sesion 04`.
+
+PCA | `Swiss` Inferencial 3/
+---
+
+**PCA inferencial**
+
+Con base en el aprendizaje realizado, se define para un componente principal ${c_{j\cdot}}_{(n\times 1)}$ como
+\begin{eqnarray}
+c_{j\cdot} & = &   
+\boldsymbol{X}v_j \nonumber \\
+& = &
+\boldsymbol{X}v_j(\mu,\Lambda), \nonumber
+\end{eqnarray}
+donde $v_j(\mu,\Lambda)$ **hace explicito**  que el `eigenvector` asociado desta en funcion del *parametro desconocido* $\Lambda^{-1}$.
+
+* Por consiguiente, al ser definidos $(e_j,\boldsymbol{v}_j)_{j=1}^{p}$ en funcion de $\boldsymbol{\Lambda}$ (*aleatoria*), los define como **desconocidos y aleatorios** tambien.
+
+* La distribucion de $(\boldsymbol{e},\boldsymbol{V})=(e_j,\boldsymbol{v}_j)_{j=1}^{p}$ esta definida por $\text{N-Wi}(\boldsymbol{\mu},\boldsymbol{\Lambda}|\boldsymbol{m}_n,s_n,a_n,\boldsymbol{B}_n)$.
+
+PCA | `Swiss` Inferencial 4/
+---
+Siguiendo el ultimo punto, el calculo de 
+$$
+\mathbb{P}(\boldsymbol{e},\boldsymbol{V}|\boldsymbol{m}_n,s_n,a_n,\boldsymbol{B}_n),
+$$
+es *dificil de obtener analiticamente*.
+
+* Press (2005) sugiere emplear `distribuciones asintoticas` basadas en el CLT (vea Teoremas 9.3.2 y 9.3.3). Eso solo para la distribucion de los `eigenvalores` $\boldsymbol{e}=(e_1,\ldots,e_p)$, mas no para los `eigenvectores`.
+
+* En la practica, esta distribucion puede aproximarse via muestras de Monte Carlo de $\text{N-Wi}(\boldsymbol{\mu},\boldsymbol{\Lambda}|\boldsymbol{m}_n,s_n,a_n,\boldsymbol{B}_n)$ de acuerdo al siguiente algoritmo.
+
+PCA | `Swiss` Inferencial 5/
+---
+
+**Algotimo**
+
+0. Actuarlizar la distrinucion de los parametros $(\mu,\Lambda)$ con base en $\boldsymbol{X}$. Fijar el tamanio de la muestra simulada $M$.
+
+Para $m=1,\dots,M$,
+
+1. Generar los `pseudodatos aleatorios` $(\boldsymbol{\mu}^{(m)},\boldsymbol{\Lambda}^{(m)})$ como
+\begin{eqnarray}
+\boldsymbol{\Lambda}^{(m)} & \sim & \text{Wi}(\boldsymbol{\Lambda}|a_n,\boldsymbol{B}_n), \nonumber \\
+\boldsymbol{\mu}^{(m)}|\boldsymbol{\Lambda}^{(m)} & \sim & \text{N}(\boldsymbol{\mu}|\boldsymbol{m}_n,s_n\boldsymbol{\Lambda}^{(m)}). \nonumber
+\end{eqnarray}
+
+2. Generar la `descomposicion espectral` 
+$$
+(e_j^{(m)},\boldsymbol{v}^{(m)}_j)_{j=1}^{p},
+$$
+de $\boldsymbol{\Sigma}^{(m)}=\left(\boldsymbol{\Lambda}^{(m)}\right)^{-1}$.
+
+3. Generar los componentes principales $\boldsymbol{C}^{(m)}=(\boldsymbol{c}_{1\cdot}^{(m)},\ldots,\boldsymbol{c}_{p\cdot}^{(m)})$ como
+$$
+\boldsymbol{c}_{j\cdot}^{(m)}=\boldsymbol{X}\boldsymbol{v}_{j}^{(m)}.
+$$
+
+PCA | `Swiss` Inferencial 6/
+---
+
+**Comentarios**
+
+* Las muestras $$
+\left(e_j^{(m)},\boldsymbol{v}^{(m)}_j\right)_{j=1,m=1}^{p,M}
+$$
+son `iid` de 
+$$
+\mathbb{P}(\boldsymbol{e},\boldsymbol{V}|\boldsymbol{m}_n,s_n,a_n,\boldsymbol{B}_n).
+$$
+
+* Las muestras 
+$$
+\left(\boldsymbol{C}^{(m)}\right)_{m=1}^{M}=(\boldsymbol{c}_{1\cdot}^{(m)},\ldots,\boldsymbol{c}_{p\cdot}^{(m)})_{m=1}^{M}
+$$
+son `iid` de 
+$$
+\mathbb{P}(\boldsymbol{C}|\boldsymbol{m}_n,s_n,a_n,\boldsymbol{B}_n).
+$$
+
+PCA | `Swiss` Inferencial 7/
+---
+
+```{r algoritmo, echo=TRUE}
+M <- 10000
+mu.sim <- matrix(NA,nrow=M, ncol=ncol(data))
+Lambda.sim <- array(NA,dim=c(M,ncol(data),ncol(data)))
+e.sim <- matrix(NA,nrow=M, ncol=ncol(data))
+V.sim <- array(NA,dim=c(M,ncol(data),ncol(data)))
+C.sim <- array(NA,dim=c(M,nrow(data),ncol(data)))
+m <- 1; X <- as.matrix(data)
+for(m in 1:M){
+  # Simulacion (mu,Lambda)
+  Lambda.sim[m,,] <- rWishart(1, output[[3]], output[[4]])
+  mu.sim[m,] <- mvrnorm(1, mu=output[[1]], Sigma=solve(output[[2]]*Lambda.sim[m,,]), tol = 1e-6)
+  # Simulacion (e,V) + C
+  eigen_aux <- eigen(solve(Lambda.sim[m,,]))
+  e.sim[m,] <- eigen_aux$values
+  V.sim[m,,] <- eigen_aux$vectors
+  C.sim[m,,] <- X %*% V.sim[m,,]
+}
+```
+
+PCA | `Swiss` Inferencial 8/
+---
+
+Inferencia sobre el `eigenvenctor` $e_1$
+```{r}
+hist(e.sim[,1])
+summary(e.sim[,2])
+```
+
+PCA | `Swiss` Inferencial 9/
+---
+
+Inferencia sobre el `eigenvenctor` $e_1$
+```{r}
+summary(e.sim[,2])
+```
+
+PCA | `Swiss` Inferencial 10/
+---
+
+Inferencia sobre el componente principal uno $c_{i,1}$ de la observacion $i=1$
+```{r}
+hist(C.sim[,1,1])
+summary(C.sim[,1,1])
+```
+
+PCA | `Swiss` Inferencial 11/
+---
+
+Inferencia sobre el componente principal uno $c_{i,1}$ de la observacion $i=1$
+```{r}
+summary(C.sim[,1,1])
+```
+
+Ejercicio
+---
+
+Consideren el archivo `est46114_s06_data.xls` con los tipos de cambio reales (respecto a USD) de varias economias (periodo 1970-2010).
+
+1. Implementen el *procedimiento inferencial PCA* considerando distribuciones iniciales no informativas para $\boldsymbol{\mu},\boldsymbol{\Lambda}$.
+
+2. Reporten que economia tiene el mayor peso esperado en la descomposicion PCA.
+
+3. Reporten que economia tiene la mayor consistencia en estimacion de los $c_j$s correspondientes.
+
+
+Lecturas complementarias
+---
+
+* Maski (2015) "Communicating Uncertainty in Official Economic Statistics". `est46114_s06_suplemento.pdf`
+
+* Press (2005) *Applied Multivariate analysis*, Caps. 3 y 5.
+

@@ -1,0 +1,165 @@
+---
+title: "Tarea 02"
+author:
+-  "Víctor Augusto Samayoa Donado"
+-  "CVu: 175750"
+date: "Febrero 19, 2019"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: yes
+    self_contained: yes
+    theme: flatly
+    highlight: textmate
+fig_align: "center"
+fig_width: 18
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Se cargan las librerias a utilizar
+library(fields)
+library(mnormt)
+library(MCMCpack)
+library(actuar)
+library(tidyverse)
+library(kernlab)
+library(readxl)
+
+# Se cargan los datos a utilizar
+data <- read_xls("est46114_s06_data.xls") %>% 
+        select(-Date)
+```
+
+# Ejecicio 1 {.tabset .tabset-fade .tabset-pills}
+Apliquen el analisis de factores dinamicos en estos datos considerando que se recupere un solo factor (eliminando los paises con cambios en nivel significativo).
+
+```{r}
+data_factorial_uno <- MCMCfactanal(as.matrix(data), factors = 1, a0 = 1, b0 = 0.15,
+                                   burnin = 500, mcmc = 10000, thin = 20)
+```
+
+Se procede a gráficar la media y un invervalo de confianza del $95\%$ para el valor del factor para cada uno de los paises.
+
+```{r, fig.height = 20}
+factor_uno <- summary(data_factorial_uno)
+posiciones <-  grep('Lambda+', rownames(factor_uno$statistics))
+
+resumen_factor_uno <- tibble(pais = colnames(data),
+                             media = factor_uno$statistics[posiciones, 1],
+                             quantil_0.25 = factor_uno$quantiles[posiciones, 1],
+                             quantil_9.75 = factor_uno$quantiles[posiciones, 5])
+resumen_factor_uno %>% 
+  ggplot(aes(x = reorder(pais, media))) +
+  geom_hline(yintercept = 0, color = "firebrick", size = 1) +
+  geom_errorbar(aes(ymin = quantil_0.25, ymax = quantil_9.75)) +
+  geom_point(aes(y = media), color = "steelblue") +
+  coord_flip()
+```
+
+De la gráfica anterior, se puede apreciar que existen paises cuyo intervalo de confianza contiene al cero. Por lo tanto este factor no puede explicar el comportamiento de dichos paises.
+
+```{r}
+resumen_factor_uno %>% 
+  rowwise() %>% 
+  mutate(is_zero = between(0, quantil_0.25, quantil_9.75)) %>% 
+  filter(is_zero) %>% 
+  DT::datatable()
+```
+
+
+# Ejercicio 2 {.tabset .tabset-fade .tabset-pills}
+Apliquen el analisis de factores dinamicos en estos datos considerando que se recuperen dos factores (eliminando los paises con cambios en nivel significativo).
+
+
+```{r}
+data_factorial_dos <- MCMCfactanal(as.matrix(data), factors = 2, a0 = 1, b0 = 0.15,
+                                   burnin = 500, mcmc = 10000, thin = 20)
+```
+
+Se procede a gráficar la media y un invervalo de confianza del $95\%$ para el valor del factor para cada uno de los paises.
+
+```{r, fig.height = 20}
+factor_dos <- summary(data_factorial_dos)
+posiciones1 <-  grep('Lambda(.+)_1', rownames(factor_dos$statistics))
+posiciones2 <-  grep('Lambda(.+)_2', rownames(factor_dos$statistics))
+
+
+resumen_factor_dos <- tibble(pais = colnames(data),
+                             f1_media = factor_dos$statistics[posiciones1, 1],
+                             f1_quantil_0.25 = factor_dos$quantiles[posiciones1, 1],
+                             f1_quantil_9.75 = factor_dos$quantiles[posiciones1, 5],
+                             f2_media = factor_dos$statistics[posiciones2, 1],
+                             f2_quantil_0.25 = factor_dos$quantiles[posiciones2, 1],
+                             f2_quantil_9.75 = factor_dos$quantiles[posiciones2, 5])
+resumen_factor_dos %>% 
+  ggplot(aes(x = reorder(pais, f1_media))) +
+  geom_hline(yintercept = 0, color = "firebrick", size = 1) +
+  geom_errorbar(aes(ymin = f1_quantil_0.25, ymax = f1_quantil_9.75)) +
+  geom_point(aes(y = f1_media), color = "steelblue") +
+  coord_flip()
+```
+
+De la gráfica anterior, se puede apreciar que existen paises cuyo intervalo de confianza contiene al cero. Por lo tanto el factor 1 no puede explicar el comportamiento de dichos paises.
+
+```{r}
+resumen_factor_dos %>% 
+  rowwise() %>% 
+  mutate(is_zero = between(0, f1_quantil_0.25, f1_quantil_9.75)) %>% 
+  filter(is_zero) %>% 
+  DT::datatable()
+```
+
+A continuación se muestra la gráfica para el factor 2
+
+```{r}
+resumen_factor_dos %>% 
+  ggplot(aes(x = reorder(pais, f2_media))) +
+  geom_hline(yintercept = 0, color = "firebrick", size = 1) +
+  geom_errorbar(aes(ymin = f2_quantil_0.25, ymax = f2_quantil_9.75)) +
+  geom_point(aes(y = f2_media), color = "steelblue") +
+  coord_flip()
+```
+
+Y se aprecian paises cuyo intervalo de confianza también tiene al cero, por lo que estos paises no pueden ser explicados por el segundo factor
+
+```{r}
+resumen_factor_dos %>% 
+  rowwise() %>% 
+  mutate(is_zero = between(0, f2_quantil_0.25, f2_quantil_9.75)) %>% 
+  filter(is_zero) %>% 
+  DT::datatable()
+```
+
+Es interesante observar que Rusia es el único país que tiene intervalos de confianza que contienen al cero en ambos factores, por lo que el comportamiento para el tipo de cambio en la moneda rusa, no es explicado por ninguno de estos factores.
+
+
+# Ejercicio 3
+Comparen las distribuciones y niveles medios del primer factor del inciso anterior con el factor unico del primer inciso. Discutan que pasa con los niveles medios y la dispersion subyacente de estos dos factores.
+
+```{r}
+e1 <- resumen_factor_uno
+
+e2 <- resumen_factor_dos %>% 
+      rename(media = f1_media,
+             quantil_0.25 = f1_quantil_0.25,
+             quantil_9.75 = f1_quantil_9.75)
+
+e1 %>% 
+  ggplot(aes(x = reorder(pais, media))) +
+  geom_hline(yintercept = 0, size = 1) +
+  geom_point(aes(y = media), color = "steelblue") +
+  geom_errorbar(aes(ymin = quantil_0.25, ymax = quantil_9.75), color = "steelblue") +
+  geom_point(data = e2, aes(y = media), color = "firebrick") +
+  geom_errorbar(data = e2, aes(ymin = quantil_0.25, ymax = quantil_9.75), color = "firebrick") +
+  coord_flip()
+```
+
+En la gráfica anterior los puntos azules (junto con sus intervalos) representan el primer factor del ejercicio 1, los puntos rojos (junto con sus intervalos) representan el primer factor del ejercicio 2.
+
+Se puede apreciar que hay diferencias en la forma en como explican los factores el comportamiento de cada uno de los paises. En partícular, se aprecia que son inversamente proporcionales en cuestión al signo que le asocian a los paises de los extremos (superior e inferior). Pero no preservan el mismo orden (respecto al valor absoluto de la media) sobre los paises.
+
+Otro punto interesante es que los paises que se encuentran a la mitad (cercad el cero pero con valores negativos), se preservan en ambos factores.

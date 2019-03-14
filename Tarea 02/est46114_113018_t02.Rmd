@@ -1,0 +1,90 @@
+---
+title: "Tarea_03_113018"
+author: "Paulina Gómez Mont W"
+date: "2/28/2019"
+output: html_document
+---
+```{r, echo=FALSE}
+#Cargamos las librerias que se necesitar??n
+library("fields")
+library("mnormt")
+library("MCMCpack")
+library("actuar")
+library("ggplot2")
+library("kernlab")
+library(tidyverse)
+```
+
+Obtenemos la base de datos de los tipos de cambio.
+```{r}
+data <-read.csv("/Users/paugmw/Downloads/est46114_s06_data.csv") 
+#Le cambiamos el nombre  a fecha
+c <- names(data)
+c[1] <- "Fecha"
+names(data) <- c
+data[,1] <- c(1:dim(data)[1])
+```
+Para cada país y cada año le restamos la media del tipo de cambio de ese año
+```{r}
+for(i in 1:(dim(data)[1]/12)){
+  for(k in 2:dim(data)[2]){
+    for(j in 1:12){
+      data[j*i,k] <- data[j*i,k]-mean(data[j*(1:12),k])
+      
+    }
+  }
+}
+
+```
+1. Apliquen el analisis de factores dinamicos en estos datos considerando que se recupere un solo factor (eliminando los paises con cambios en nivel significativo).
+
+
+```{r}
+
+M.sim <- 1000
+M.burn <- 50
+k <- 1
+
+posterior.data.sim <- MCMCfactanal(data, 
+                          factors=k,
+                          verbose=0, store.scores=FALSE, 
+                          a0=1, b0=0.15,
+                          data=data, 
+                          burnin=M.burn, mcmc=M.sim, thin=20)
+
+```
+Observamos el resultado de las simulaciones obtenidas por MCM, observamois que los valores de las lambdas (pesos) sopn menores a 0, y los valores de los factores latentes son mayores a 0 pero menos en 0.5 (en promedio.)
+```{r}
+summary(posterior.data.sim)
+
+```
+
+
+
+
+2. Apliquen el analisis de factores dinamicos en estos datos considerando que se recuperen dos factores (eliminando los paises con cambios en nivel significativo).
+
+Nota agregamos la restricción de $\lambda_{1,2}=0$
+```{r}
+
+M.sim <- 1000
+M.burn <- 50
+k <- 2
+
+posterior.data.sim.k2 <- MCMCfactanal(data, 
+                          factors=k,
+                          verbose=0, store.scores=FALSE, 
+                          lambda.constraints=list(Canada=list(2,0)),
+                          a0=1, b0=0.15,
+                          data=data, 
+                          burnin=M.burn, mcmc=M.sim, thin=20)
+
+```
+Observamos el resultado de las simulaciones obtenidas por MCM con 2 factores, obsrevamos que LambdaCanada_2 no aparece ya que especificamos que sea cero, por otro lado observamos que en la mayoría de los países la columna de pesos para el primer factor se volvio más negativa, aunque en algunos casos se volvio positiva, también podemos observar que en muchos casos en que los pesos son negativos en la primer columna de pesos, el peso es positivo para la segunda columna de pesos. También observamos que en el caso de los factores latentes son significativamente más grandes que en el modelo con un sólo factor.
+```{r}
+summary(posterior.data.sim.k2)
+
+```
+
+
+

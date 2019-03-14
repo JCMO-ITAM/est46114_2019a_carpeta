@@ -1,0 +1,55 @@
+---
+title: "EST46114: Algoritmos para el modelo FA"
+author: "Juan Carlos Martinez-Ovando"
+output: html_notebook
+---
+
+# Modelo
+Para un conjunto de $n$ observaciones $p$ dimensionales, $\boldsymbol{X}=(\boldsymbol{x}_i)_{i=1}^n$, organizados matricialmente con dimensiones $(n\times p)$, se especifica el modelo de factores, para un $k<p$ dado, como
+$$ 
+\boldsymbol{x}_i|\lambda,f_i,\Sigma \sim \text{N}(\boldsymbol{x}_i|\lambda f_i,\Sigma),
+$$
+para $i=1,\ldots,n$, donde 
+
+* $\lambda$ es una matriz de cargas de factores de dimension $(p\times p)$
+
+* $f_i$ es un vector de factores latentes de dimension $(k\times 1)$
+
+* $\Sigma=\text{diag}\{\sigma_1^2,\ldots,\sigma_p^2\}$ es la matriz de varianzas de las $p$ dimensiones.
+
+El modelo se complementa con la especificion distribucional para $f_i$, dada por
+$$
+f_i \sim \text{N}(f_i|0,I).
+$$
+
+### Especificacion de la *prior*
+
+La distriucion inicial para este modelo esta dada por,
+$$
+\Pi(\lambda,\Sigma)=\Pi(\lambda)\times \Pi(\Sigma),
+$$
+con
+$$
+\Pi(\lambda)=\prod_{i=1}^p\prod_{j=i1}^k\Pi(\lambda_{ij}),
+$$
+y
+$$
+\Pi(\Sigma)=\prod_{i=1}^p \Pi(\sigma_i^2),
+$$
+donde
+$$
+\Pi(\lambda_{ij})=\text{N}(\lambda_{ij}|0,C_0), \text{ para }i\neq j,\\
+\Pi(\lambda_{ii})=\text{N}(\lambda_{ii}|0,C_0)\mathbb{I}(\lambda_{ii}>0), \\
+\Pi(\sigma_i^2)=\text{GaInv}(\sigma_i^2|v_0/2.s_0/2),
+$$
+con $c_0,v_0,s_0$ conocidos.
+
+## Algoritmo EM
+
+## Algoritmo Gibbs
+
+# Referencias
+
+* Dempster (1977) *Derivation of Maximum Likelihood Factor Analysis using EM* [Link](http://web.mit.edu/6.435/www/Dempster77.pdf)
+
+* Casella & George (1992) *Explaining the Gibbs Sampler* [Link](http://www2.stat.duke.edu/~scs/Courses/Stat376/Papers/Basic/CasellaGeorge1992.pdf) 

@@ -1,0 +1,139 @@
+---
+title: "Tarea 1"
+author: "Francisco Acosta   183270"
+output: html_document
+---
+
+```{r, message=FALSE}
+library(rio)
+library(MASS)
+library(tidyverse)
+library(mvtnorm)
+library(Matrix)
+```
+
+**Consideren los datos de tipo de cambio USD de la sesión 06 (`est46114 s06 data.csv`).**
+
+```{r}
+cambio <- import('est46114_s06_data.xls')
+cambio <- as_tibble(cambio)
+cambio <- cambio %>% dplyr::select(-Nicaragua)
+cambio
+```
+
+**1. Implementen el procedimiento inferencial PCA considerando distribuciones iniciales no informativas para ($\mu, \Lambda$).**
+
+```{r echo=FALSE}
+usd <- as.matrix(cambio[,2:80])
+rownames(usd) <- as.character(cambio[,1]$Date)
+usd <- usd[2:nrow(usd),] - usd[1:(nrow(usd)-1),]
+
+usd_pca <- prcomp((usd), scale. = TRUE)
+summary(usd_pca)
+```
+
+Examinemos los 5 primeros componentes. En total, capturan 37.96% de la variabilidad. No es mucho.
+
+```{r echo=FALSE}
+pc_rotados <- round(usd_pca$rotation[,], 2)
+pc_rotados[,1:10]
+```
+
+```{r}
+# hagamos colores para distinguir continentes
+colores <- c(rep('blue',19,), rep('red', 21), rep('pink', 6), 
+             rep('yellow',16), rep('green', 17))
+plot(x=usd_pca$rotation[,1], 
+     y = usd_pca$rotation[,2], 
+     col=colores)
+calibrate::textxy(X=usd_pca$rotation[,1], 
+                  Y = usd_pca$rotation[,2], 
+                  labs=rownames(usd_pca$rotation))
+```
+
+Podemos ver algunas agrupaciones. Los países europeos (en rojo) se encuentran mayoritamiento en el lado izquierdo del PC1, los países americanos (azul) en el lado izquierdo, los países asiáticos (amarillo) en la parte positiva del PC2 y hay dos grupos de países africanos, unos cerca de América y un grupo pequeño en la parte inferior. Es de notar lo aislada que está China, en la parte inferior.
+
+
+**2. Reporten que economia tiene el mayor peso esperado en la descomposicion PCA.**
+
+```{r}
+as_tibble(pc_rotados) %>% 
+    mutate(pais=rownames(pc_rotados)) %>% 
+    dplyr::select(pais, PC1, PC2) %>% 
+    arrange(desc(PC1))
+```
+
+Los países con mayor peso son países para la dimensión 1 son países de América en la parte positiva (incluyendo a México, El Salvador y Costa Rica) y países europeos en la parte negativa. En general, esto es similar a lo que observamos en la gráfica.
+
+**3. Reporten que economia tiene la mayor consistencia en estimacion de los $c_js$ correspondientes.**
+
+```{r algoritmo, echo=TRUE}
+
+a0 <- 1
+s0 <- 1
+m0 <- matrix(0,ncol=1,nrow=79)
+B0 <- diag(1,ncol=79,nrow=79) 
+
+gaussian.posterior <- function(data,m0,s0,a0,B0){
+  xbar <- as.matrix(colMeans(usd))
+  S <- cov(usd)
+  n <- nrow(usd)
+  p <- ncol(usd)
+  # Posterior hiperparameters
+  sn <- s0 + n
+  an <- a0 + n/2
+  mn <- (s0*m0 + n*xbar)/sn
+  Bn <- B0 + (n/2)*(S + (s0/sn)*(xbar-m0)%*%t(xbar-m0))
+  # Output
+  output <- list(mn,sn,an,Bn)
+  return(output)
+}
+
+output <- gaussian.posterior(data,m0,s0,a0,B0)
+```
+
+```{r}
+M <- 1000
+mu.sim <- matrix(NA,nrow=M, ncol=ncol(usd))
+Lambda.sim <- array(NA,dim=c(M,ncol(usd),ncol(usd)))
+e.sim <- matrix(NA,nrow=M, ncol=ncol(usd))
+V.sim <- array(NA,dim=c(M,ncol(usd),ncol(usd)))
+C.sim <- array(NA,dim=c(M,nrow(usd),ncol(usd)))
+X <- as.matrix(usd)
+for(m in 1:M){
+  # Simulacion (mu,Lambda)
+  Lambda.sim[m,,] <- rWishart(1, output[[3]], output[[4]])
+  mu.sim[m,] <- mvrnorm(1, mu=output[[1]], Sigma=solve(output[[2]]*Lambda.sim[m,,]), tol = 1e-6)
+  # Simulacion (e,V) + C
+  eigen_aux <- eigen(solve(Lambda.sim[m,,]))
+  e.sim[m,] <- eigen_aux$values
+  V.sim[m,,] <- eigen_aux$vectors
+  C.sim[m,,] <- X %*% V.sim[m,,]
+}
+```
+
+Ahora sí, observemos la consistencia de la primera economía, Canadá. Para medir esto podeos medir la desviacion estándar
+
+```{r}
+cp1 <- c()
+for (n in 1:dim(C.sim)[3]) {
+    cp1 <- c(cp1, sd(C.sim[,1,n]))
+}
+cp2 <- c()
+for (n in 1:dim(C.sim)[3]) {
+    cp2 <- c(cp2, sd(C.sim[,2,n]))
+}
+
+a <- tibble(pais = colnames(usd), 
+       consistencia_pc1 = cp1, 
+       consistencia_pc2 = cp2)
+
+a %>% arrange((consistencia_pc1))
+a %>% arrange((consistencia_pc2))
+
+```
+
+En lo que respecta al primer componente, las economías más consistentes son países de América Latina (Guatemala, Honduras, Venezuela, El Salvador). Al contrario, los países más inconsistentes son países de África. El segundo componente arroja resultados similares.
+
+
+

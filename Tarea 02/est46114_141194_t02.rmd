@@ -1,0 +1,108 @@
+---
+title:Tarea_141194
+subtitle: Sesion 09 - Analisis de Factores - Parte 2/3
+author: Arantza Ivonne Pineda Sandoval_141195
+
+---
+
+Se presenta a continucación el código, primero para un ejemplo con datos simulados vistos en clase y posteriormente, usando la base de datos con varios países.
+
+Se implementan las librerías, incluida la libreria MCMCpack, con MCMC para el modelo de factores
+
+```{r MCMCpack, include=FALSE}
+if(!require("MCMCpack")){install.packages("MCMCpack")}
+library("MCMCpack")
+
+if(!require("MASS")){install.packages("MASS")}
+library("MASS")
+
+library(tidyverse)
+
+library(readxl)
+```
+
+
+
+Ejemplo de Datos simulados :
+
+```{r data.sim, include=FALSE}
+set.seed(123)
+n <- 500
+p <- 5
+k <- 2
+mu.star <- matrix(0,nrow=p,ncol=1)
+beta.star <- matrix(c(0.99,0.00,0.90,0.00,0.50,
+0.00,
+0.99,
+0.00,
+0.90,
+0.50),nrow=p,ncol=k)
+Sigma.star <- diag(c(0.01, 0.05, 0.10, 0.15, 0.20))
+Omega <- beta.star%*%t(beta.star)+Sigma.star
+data.sim <- mvrnorm(n , mu=mu.star, Sigma=Omega, tol = 1e-6, empirical = FALSE, EISPACK = FALSE)
+data.sim <- as.data.frame(data.sim)
+colnames(data.sim) <- c("Y1","Y2","Y3","Y4","Y5")
+```
+
+```{r data.sim_plot, echo=FALSE}
+pairs.panels(data.sim, ellipses=F, scale=T, smooth=F, col=0)
+```
+
+```{r data.sim.factor, include=FALSE}
+M.sim <- 10000
+M.burn <- 500
+posterior.data.sim <- MCMCfactanal(~Y1+Y2+Y3+Y4+Y5, 
+                          factors=k,
+                          lambda.constraints=list(Y1=c(1,0),
+                                                  Y2=c(2,0),
+                                                  Y3=c(1,0)),
+                          verbose=0, store.scores=FALSE, 
+                          a0=1, b0=0.15,
+                          data=data.sim, 
+                          burnin=M.burn, mcmc=M.sim, thin=20)
+```
+
+```{r data.sim.factor.plot, echo=FALSE}
+plot(posterior.data.sim)
+```
+Ejemplo de los paises:
+
+```{r swiss, echo=FALSE}
+
+
+paises<-read_excel('est46114_s06_data.xls', col_names = TRUE)
+paisesNA<-data_frame()
+paisesNA<-data_frame(paises$Canada, paises$Mexico, paises$Guatemala , paises$`El Salvador`, paises$Honduras, paises$Nicaragua, paises$`Costa Rica`)
+
+pairs.panels(paisesNA, ellipses=F, scale=T, smooth=F, col=0)
+
+```
+
+Se realiza el modelo de factores con la función MCMCfactanal:
+
+```{r swiss.factanal, include=FALSE}
+posterior.paises <- MCMCfactanal(~paises$Canada+paises$Mexico+paises$Guatemala+ paises$`El Salvador`+paises$Honduras+paises$Nicaragua+paises$`Costa Rica`, paises$Panama+paises$Jamaica+paises$`Dominican Rep`, 
+                          factors=k,
+                          lambda.constraints=list(paises$Canada=c(1,0),
+                                                  paises$Mexico=c(1,0),
+                                                  paises$Guatemala=c(1,0),
+                                                  paises$`El Salvador`=c(1,0)),
+                                                 
+                          verbose=0, store.scores=FALSE, 
+                          a0=1, b0=0.15,
+                          data=paisesNA, 
+                          burnin=M.burn, mcmc=M.sim, thin=20)
+```
+
+Se grafican las cadenas de Montecarlo para visualizar los componentes:
+
+```{r swiss.factanal.plot, echo=FALSE}
+plot(posterior.paises)
+```
+
+
+```{r swiss.factanal.summary, echo=FALSE}
+summary(posterior.paises)
+```
+
+

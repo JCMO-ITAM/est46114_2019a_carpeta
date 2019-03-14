@@ -1,0 +1,194 @@
+---
+Title: Tarea 2 Est Multiv Análisis de Factores
+Author: Carlos Albert García Michel
+---
+
+
+```{r}
+library(readxl)
+library(psych)
+library(MCMCpack)
+library(tidyverse)
+```
+
+Consideren los datos de tipo de cambio /USD de la sesión 09 (est46114 s06 data.csv).
+
+Se seleccionaron sólo las siguientes economías EU, Brazil, France , Germany, Russia, India, Mexico ,China
+```{r}
+data <- read_xls("est46114_s06_data.xls")
+data <- data %>% dplyr::select(Date,EU12, Brazil, France , Germany, Russia, India, Mexico ,'China,PR')
+colnames(data)[colnames(data)=='China,PR'] <- 'China'
+```
+
+
+
+1. Apliquen el analisis de factores dinamicos en estos datos considerando que se recupere
+un solo factor (eliminando los paises con cambios en nivel significativo).
+
+```{r}
+pairs.panels(data[,-1], ellipses=F, scale=T, smooth=F, col=0)
+```
+
+
+```{r}
+par(mfrow = c(3,1))
+plot(as.Date(data$Date), data$Mexico, type = 'l', xlab = 'Fecha')
+plot(as.Date(data$Date), data$France, type = 'l', xlab = 'Fecha')
+plot(as.Date(data$Date), data$Germany, type = 'l', xlab = 'Fecha')
+```
+Como observamos en la gráfica de correlación, es evidente que las economías de Francia y Alemania son muy similares como era esperado.
+
+
+Ahora observamos como India y China son similares. Más adelante observaremos el comportamiento del análisis de factores con estas economías que tienen una fuerte correlación
+```{r}
+par(mfrow = c(3,1))
+plot(as.Date(data$Date), data$Mexico, type = 'l', xlab = 'Fecha')
+plot(as.Date(data$Date), data$India, type = 'l', xlab = 'Fecha')
+plot(as.Date(data$Date), data$China, type = 'l', xlab = 'Fecha')
+```
+
+
+Ahora transformaremos los datos de manera que los supuestos del modelo de Análisis de factores se cumplan, generando un modelo de Factores segmentado por año y centrado en medias anuales.
+
+```{r}
+n <- length(data)
+
+# data$Year<-lubridate::year(data$Date)
+# anual<-data %>% group_by(Year) %>% summarise_at(vars(EU12:`China,PR`),funs(mean(.)))
+# medias<-t(as.data.frame(rep(anual,each=12)))
+# mat<-medias[[1]]
+# for(i in 2:length(mat)){
+#   mat<-cbind(mat,mat[[i]])
+# }
+# data_prueba <- data
+for (i in 1970:2010){
+  bloque <- data[grep(i, data$Date),2:n]
+  media <- bloque %>% colMeans()
+  for (j in 1:(n-1)){
+    data[grep(i, data$Date),][j+1]<- bloque[j]- media[j]
+  }
+}
+
+# prueba <- data[grep(1970, data$Date),2:n]
+# 
+# data_prueba <- data
+# i <- 1970
+# bloque <- data[grep(i, data$Date),2:n]
+# media <- bloque %>% colMeans()
+# 
+# data_prueba[grep(i, data$Date),][2] <- bloque[1]- media[1] 
+
+```
+
+
+
+```{r}
+par(mfrow = c(3,1))
+plot(as.Date(data$Date), data$Mexico, type = 'l', xlab = 'Fecha')
+plot(as.Date(data$Date), data$India, type = 'l', xlab = 'Fecha')
+plot(as.Date(data$Date), data$China, type = 'l', xlab = 'Fecha')
+```
+
+
+```{r}
+# M.sim <- 10000
+# M.burn <- 500
+# 
+# 
+#   
+# posterior.data <- MCMCfactanal(~Canada+Mexico+Brazil+EU12+Russia, 
+#                           factors=1,
+#                           lambda.constraints=list(Examination=list(1,"+"),
+#                                                   Examination=list(2,"-"), 
+#                                                   Education=c(2,0),
+#                                                   Infant.Mortality=c(1,0)),
+#lambda.constraints:
+#List of lists specifying possible simple equality or inequality constraints on the factor loadings. A typical entry in the list has one of three forms: varname=list(d,c) which will constrain the dth loading for the variable named varname to be equal to c, varname=list(d,"+") which will constrain the dth loading for the variable named varname to be positive, and varname=list(d, "-") which will constrain the dth loading for the variable named varname to be negative. If x is a matrix without column names defaults names of “V1",“V2", ... , etc will be used.
+                          # verbose=0, store.scores=FALSE, 
+                          # a0=1, b0=0.15,
+                          # data=data, 
+                          # burnin=M.burn, mcmc=M.sim, thin=20)
+
+
+```
+
+**Dos Factores**
+```{r}
+M.sim <- 10000
+M.burn <- 500
+
+FA_anual <- list()
+
+for (i in 1970:2010){
+R <- data[grep(i, data$Date),2:n]
+posterior.data <- MCMCfactanal(~ EU12 + Brazil + France + Germany + Russia + India + Mexico + China, 
+                          factors=2,
+                          lambda.constraints=list(EU12 = c(2,0)),
+                          verbose=0, 
+                          store.scores=T, 
+                          a0=1, 
+                          b0=0.15,
+                          data=R, 
+                          burnin=M.burn, 
+                          mcmc=M.sim, 
+                          thin=20)
+nombre <- as.character(i)
+FA_anual[[nombre]] <- posterior.data
+}
+```
+
+```{r}
+plot(FA_anual$`1970`)
+```
+
+
+```{r}
+resumen <- as.data.frame(describe(FA_anual$`1970`))
+resumen
+
+lambda1 <- resumen[grep("L(.+)_1", row.names(resumen)),] %>% select(mean)
+lambda2 <- resumen[grep("L(.+)_2", row.names(resumen)),] %>% select(mean)
+
+factores <- cbind(lambda1$mean,c(0,lambda2$mean))
+factores
+```
+
+```{r}
+plot(factores[,1],factores[,2])
+```
+
+
+
+
+**Un Factor**
+```{r}
+M.sim <- 10000
+M.burn <- 500
+
+FA_anual_1 <- list()
+
+for (i in 1970:2010){
+R <- data[grep(i, data$Date),2:n]
+posterior.data <- MCMCfactanal(~ EU12 + Brazil + France + Germany + Russia + India + Mexico + China, 
+                          factors=1,
+                          lambda.constraints=list(),
+                          verbose=0, 
+                          store.scores=T, 
+                          a0=1, 
+                          b0=0.15,
+                          data=R, 
+                          burnin=M.burn, 
+                          mcmc=M.sim, 
+                          thin=20)
+nombre <- as.character(i)
+FA_anual_1[[nombre]] <- posterior.data
+}
+```
+
+```{r}
+plot(posterior.data)
+```
+
+
+
+

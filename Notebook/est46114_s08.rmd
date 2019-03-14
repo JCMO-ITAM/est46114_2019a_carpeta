@@ -1,0 +1,257 @@
+---
+title: EST-46114 Métodos Multivariados y Datos Categóricos
+subtitle: Sesion 08 - Analisis de Factores - Parte 1/3
+author: Juan Carlos Martinez-Ovando
+institute: Maestria en Ciencia de Datos
+titlegraphic: /svm-r-sources/ITAM2016.png
+fontsize: 10pt
+output:
+ beamer_presentation:
+    template: ~/svm-r-sources/svm-latex-beamer.tex
+    keep_tex: true
+# toc: true
+    slide_level: 2
+ ioslides_presentation:
+    smaller: true
+    logo: ~/svm-r-sources/ITAM2016.png
+make149: true
+---
+
+<style>
+slides > slide.backdrop {
+  background: white;
+  border-bottom: 0px;
+  box-shadow: 0 0 0;
+}
+
+
+slides > slide {
+  font-family: 'Open Sans', Helvetica, Arial, sans-serif;
+  border-bottom: 3px solid  #F66733;
+  box-shadow:  0 3px 0 #522D80;
+
+}
+
+.title-slide hgroup h1 {
+  color: #522D80;
+}
+
+h2 {
+
+  color: #522D80;
+}
+
+slides > slide.dark {
+  background: #522D80 !important;
+  border-bottom: 0;
+  box-shadow: 0 0 0;
+}
+
+.segue h2 {
+  color: white;
+}
+
+slides > slide.title-slide {
+  border-bottom: 0;
+  box-shadow: 0 0 0;
+}
+
+ol, ul {
+
+padding-bottom: 10px;
+
+}
+
+</style>
+
+
+# Objetivos
+
+Objetivos
+---
+
+* Estudiaremos los fundamentos del analisis de factores latentes.
+
+* Revisaremos procedimientos para su implementacion.
+
+# Formulacion
+
+Preambulo
+---
+
+Consideremos que los `datos` estan definidos de la siguiente forma:
+
+* $\boldsymbol{X}$ - matrix de dimension $(n\times p)$, $n$ *observaciones/casos* y $p$ *variables/dimensiones*
+
+Se *supone* que el orden de las observaciones/casos **no es informativo**, i.e. los renglones con permutables (a.k.a. *supuesto de intercambiabilidad en* $n$).
+
+* Consideramos cada *caso* como $\boldsymbol{x}_i$ como un vector de dimension $(p\times 1)$.
+
+> El modelo de factores se contruye localmente para cada observacion/caso.
+
+Forma basica
+---
+
+La forma basica del modelo de factores considera que, paara todo entero $k<p$ **conocido/predefinido**, se tiene
+$$
+\boldsymbol{x}_i|\boldsymbol{f}_i \sim \text{N}(\boldsymbol{x}_i|\lambda \boldsymbol{f}_i,\Sigma),
+$$
+donde
+
+* $\Sigma=\text{diag}(\sigma_1^2,\ldots,\sigma_p^2)$ - matriz positivo definida de dimension $(k\times k)$
+
+* $\lambda$ - matriz de dimension $(p\times k)$ de *cargas de factores*
+
+* $\boldsymbol{f}_i$ - *vector de factores latentes* de dimension $(k\times 1)$, con
+
+$$
+\boldsymbol{f}_i \sim \text{N}(\boldsymbol{f}_i|\boldsymbol{0},\boldsymbol{1}),
+$$
+
+con
+
+* $\boldsymbol{0}$ - vector nulo $k$-dimensional
+
+* $\boldsymbol{1}$ - matriz identidad $k$-dimensional
+
+Caracteristicas
+---
+
+* Varianzas locales, $j=1,\ldots,p$, $$\text{var}(x_{ij}|\boldsymbol{f}_i)=\sigma_{i}^{2},$$
+
+* Covarianzas locales, $j\neq l$, $$\text{cov}(x_{ij},x_{il}|\boldsymbol{f}_i)=0,$$
+
+* Covarianzas marginales, $$\text{var}(\boldsymbol{x}_i|\lambda,\Sigma)=\Omega=\lambda\lambda'+\Sigma$$
+
+* Varianzas locales marginales, $j=1,...,p$, $$\text{var}(x_{ij}|\lambda,\Sigma)=\sum_{l=1}^{k}\lambda_{lj}^2+\sigma^2_j,$$
+
+* Covarianzas locales marginales, $j\neq l$, $$\text{cov}(x_{ij},x_{il})=\sum_{m=1}^{k}\lambda_{jm}\lambda_{lm},$$
+
+para todo $i$.
+
+Representacion
+---
+
+El modelo en cuestion considera a la coleccion $\left(\boldsymbol{f}_i\right)_{i=1}^{n}$ como **variables latentes**, i.e. el *modelo* es
+$$
+\boldsymbol{x}_{i}|\lambda,\Sigma \sim \text{N}(\boldsymbol{x}_i|\boldsymbol{0},\Omega),
+$$
+para todo $i$.
+
+Es decir, el modelo para las variables observables es,
+$$
+\boldsymbol{x}_{i}|\lambda,\Sigma = \int \text{N}(\boldsymbol{x}_i|\lambda \boldsymbol{f}_i,\Sigma) \text{N}(\boldsymbol{f}_i|\boldsymbol{0},\boldsymbol{1}) d \boldsymbol{f}_i,
+$$
+suponiendo que en $i$s las *observaciones/casos* son independientes estocasticamente.
+
+# Comentarios
+
+* La dimension de los factores $k$ es **fija/conocida** (no necesariamente es el caso, en general)
+
+* La estructura de **variabilidad intradimensional** esta comprendida en la matriz $\Sigma$
+
+* La estructura de **variabilidad entre dimensiones**, respecto a $\boldsymbol{f}$, esta comprendida en $\lambda$
+
+* Los factores comunes en $\lambda$ agrupan la informacion de la estructura de dependencia entre las $p$-variables originales 
+
+Invarianza
+---
+
+El modelo de factores, para un $k$ predefinido, es **invariante** ante transformaciones ortogonales de la forma,
+$$
+\lambda^{*}=\lambda P', \text{ y } \boldsymbol{f}^{*}_i=P \boldsymbol{f}_i,
+$$
+con $P$ una matriz ortogonal de dimension $(k\times k)$.
+
+Identificabilidad
+---
+
+Dado el resultado de invarianza, el modelo puede resultar ser **estructuralmente no identificable**.
+
+Una solucion, dentro de varias alternativas, consiste en restringir los pesos en la matriz $\lambda$, de la forma
+$$
+\lambda
+= 
+\begin{pmatrix}
+\lambda_{11} & 0 & 0 & \cdots & 0 \\ 
+\lambda_{21} & \lambda_{22} & 0 & \cdots & 0 \\ 
+\lambda_{31} & \lambda_{32} & \lambda_{33} & \cdots & 0 \\ 
+\vdots & \vdots & \vdots & \ddots & \vdots \\ 
+\lambda_{k1} & \lambda_{k2} & \lambda_{k3} & \cdots & \lambda_{kk} \\ 
+\lambda_{(k+1)1} & \lambda_{(k+1)2} & \lambda_{(k+1)3} & \cdots & \lambda_{(k+1)k} \\ 
+\vdots & \vdots & \vdots & \vdots & \vdots \\ 
+\lambda_{p1} & \lambda_{p2} & \lambda_{p3} & \cdots & \lambda_{pk}
+\end{pmatrix}.
+$$
+
+Reduccion de parametros
+---
+
+El *numero total de parametros* posiblemente involucrados en $\Omega$ es
+$$
+\frac{p(p+1)}{2},
+$$
+para medir la variabilidad involucrada en las $p$-dimensiones originales. 
+
+Mientras que con la representacion de factores, el **numero de parametros efectivo** se reduce a
+$$
+p(k+1)-\frac{k(k-1)}{2}.
+$$
+
+Modelo saturado
+---
+
+En el caso del **modelo saturado,** en el que $k=p$, el analisis de factores debe cumplir con la restriccion
+$$
+\frac{p(p+1)}{2}-p(k+1)+\frac{k(k-1)}{2}\geq 0,
+$$
+lo cual define una **cota estructural** para la determinacion de $k$.
+
+**Casos**
+
+\textcolor{blue}{(C1)} $p=6$ implica que $k\leq 3$
+
+\textcolor{blue}{(C2)} $p=12$ implica que $k\leq 7$
+
+\textcolor{blue}{(C3)} $p=20$ implica que $k\leq 14$
+
+\textcolor{blue}{(C4)} $p=50$ implica que $k\leq 40$
+
+Ordenamiento de factores
+---
+
+A diferencia de PCA, el analisis de factores no genera *variables latentes ordenadas*.
+
+El ordenamiento puede realizarse mediante un ejercicio de rotacion con una matriz $A$, transformando el modelo con 
+$$
+\lambda^{*}=A\lambda.
+$$
+
+> **Observemos,** que la matriz $\lambda^{*}$ no necesariamente tiene la estructura triangular inferior citada antes, para identificabilidad.
+
+\textcolor{blue}{Sin embargo,} se puede encontrar una matriz ortogonal $P$ tal que $$A\lambda P',$$ sea triangular inferior y asi recuperar la misma estructura de codependencia del modelo original.
+
+> Esta consideracion es importante al hacer inferencia sobre $k$ --numero de factores--.
+
+# Complementos
+
+Siguiente sesion
+---
+
+* Estudio del analisis de factores latentes dinamicos/factores latentes en volatilidad.
+
+* Inferencia sobre el numero de factores.
+
+* Comparacion inferencial entre PCA y analisis de factores.
+
+* Prediccion con factores latentes.
+
+Lectura complementaria
+---
+
+* Stock & Watson (2002) *Forecasting using principal components from a large number of predictors.* `est46114_s08_suplemento1.pdf`
+
+* West (2003) *Bayesian factor regression models in the "large p, small n" paradigm.* `est46114_s08_suplemento2.pdf`
+
+* Pitt & Shephard (1999) *Time varying covariances: A factor stochastic volatility approach.* `est46114_s08_suplemento3.pdf`
+

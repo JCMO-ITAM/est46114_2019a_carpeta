@@ -1,0 +1,522 @@
+---
+title: "Sesión 11: Corrección Tarea de Análisis de Factores"
+author: "Alejandra Lelo de Larrea Ibarra"
+date: "24 de febrero de 2019."
+header-includes:
+  - \usepackage[spanish,mexico]{babel}
+  - \usepackage{arydshln}
+  - \usepackage{lscape}
+  - \usepackage{rotating}
+  - \usepackage{xcolor}
+  - \usepackage{float}
+  - \usepackage{framed}
+output: 
+  pdf_document:
+    fig_caption: yes
+    number_sections: true
+    toc: true
+    toc_depth: 3
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# par(mar=c(3.1,3.1,1.6,1.6))
+setwd("~/Documents/ITAM_Maestria/04_Primavera_2019/02_EstMultivar_DatosCat/03_Ejercicios")
+```
+
+
+# Introducción 
+
+Se tienen datos con los tipos de cambio reales (respecto a USD) de varias economias (periodo 1970-2010). El objetivo es implementar el procedimiento inferencial de análisis de factores para estos datos utilizando uno y dos factores para comparar si el primer factor en ambos casos es similar o no. 
+
+# Datos
+
+```{r, message=FALSE,warning=FALSE}
+# Se cargan los paquetes
+library("fields")
+library("mnormt")
+library("MCMCpack")
+library("actuar")
+library("ggplot2")
+library("kernlab")
+library("tidyverse") 
+library("readr") 
+library("psych") 
+library("mvtnorm")
+library("MASS")
+library("xlsx")
+library("knitr")
+```
+
+```{r funciones_auxilares}
+# Función para extraer modas
+getmode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+```
+
+Leemos los datos correspondientes a los tipos de cambio de distintas economías. Se tienen 492 observaciones mensuales para 80 economías. 
+
+```{r datos}
+# Cargamos los datos)
+data<-read.xlsx("../01_Notas_Ovando/est46114_s06_data.xls",sheetName = 'RealXR_Data')
+
+# Obtenemos las dimensiones de los datos
+dim(data)
+
+# Extraemos las fechas 
+fechas<-data$Date
+
+data<-select(data,-Date)
+```
+
+## Análisis exploratorio 
+
+Vemos que países están en la muestra: 
+```{r paises}
+# Vemos la lista de países 
+colnames(data)
+
+```
+
+Graficamos las series de tiempo de los países para tener una idea de qué esté pasando. 
+
+```{r seriesTiempo,fig.width=12,fig.height=14}
+# SE parte el plot en 8 pedazos
+par(mfrow=c(4,2))
+
+# Se grafican series de tiempo de los tipos de cambio
+plot.ts(as.ts(data[,1:10],start=c(1970,1),end=c(2010,12),frequency=12),plot.type='single')
+plot.ts(as.ts(data[,11:20],start=c(1970,1),end=c(2010,12),frequency=12),plot.type='single')
+plot.ts(as.ts(data[,21:30],start=c(1970,1),end=c(2010,12),frequency=12),plot.type='single')
+plot.ts(as.ts(data[,31:40],start=c(1970,1),end=c(2010,12),frequency=12),plot.type='single')
+plot.ts(as.ts(data[,41:50],start=c(1970,1),end=c(2010,12),frequency=12),plot.type='single')
+plot.ts(as.ts(data[,51:60],start=c(1970,1),end=c(2010,12),frequency=12),plot.type='single')
+plot.ts(as.ts(data[,61:70],start=c(1970,1),end=c(2010,12),frequency=12),plot.type='single')
+plot.ts(as.ts(data[,71:80],start=c(1970,1),end=c(2010,12),frequency=12),plot.type='single')
+
+```
+
+Como era de suponerse, parece haber economías que tienen la misma dinámica en sus tipos de cambios. Además hay economías que sobresalen del resto. Parecería buena idea reducir la dimensión de este conjunto de datos. Probablemente alguno de los factores latentes pueda estar relacionado con el nivel del tipo de cambio y otro con la tendencia. 
+
+
+## Estandarización de datos por media y varianza anual.
+
+Como en componenetes principales, se estandarizan los datos utilizando la media y la varianza anuales.
+
+```{r}
+# Extrae el año de cada observación
+data$year=as.numeric(format(fechas,"%Y"))
+
+# Se extraen las medias por año por variable
+data_mean<-data%>%
+  group_by(year)%>%
+  summarise_all(mean)
+
+colnames(data_mean)[2:ncol(data_mean)]<-paste("mean",colnames(data_mean)[2:ncol(data_mean)],sep=".")
+
+
+# Se extraen las desviaciones estándar por año por variable
+data_sd<-data%>%
+  group_by(year)%>%
+  summarise_all(sd)
+
+colnames(data_sd)[2:ncol(data_sd)]<-paste("sd",colnames(data_sd)[2:ncol(data_sd)],sep=".")
+
+# Funcion para estandarizar datos. 
+estandarizar<-function(country){
+  
+  aux<-select(data,year,contains(country))
+  aux.mean<-select(data_mean,year,contains(country))
+  aux.sd<-select(data_sd,year,contains(country))
+  
+  aux<-left_join(aux,aux.mean,by="year")%>%
+    left_join(aux.sd,by="year")
+  
+  colnames(aux)<-c("year","obs","mean","sd")
+  
+  aux<-aux%>%
+    mutate(estand=(obs-mean)/sd)
+  
+  return(aux$estand)
+}
+
+# Se estandariza cada uno de los tipos de cambio con media y varianza anual. 
+data_estand<-lapply(colnames(data)[1:(ncol(data)-1)],estandarizar)
+
+# Se asignan nombres a los elementos de la lista 
+names(data_estand)<-colnames(data)[1:(ncol(data)-1)]
+
+# Se convierte a dataframe y se elimina nicaragua.
+data_estand<-as_data_frame(data_estand)%>%select(-Nicaragua)
+```
+
+
+# Inferencia en Análisis de Factores
+
+Pensemos que para cada observación mensual se tiene que 
+$$
+\boldsymbol{X}_{j}|f_j \sim N_{p}(\boldsymbol{X_j}|\lambda f_j,\boldsymbol{\Sigma}),
+$$
+con $j=1,\ldots,n=492$ donde $\Lambda$ es la matriz de cargas (desconocida), $f_j$ son los factores latentes asociados a la observación $j$ y $\Sigma$ la matriz diagonal de varianzas (desconocida).  
+
+Además, los factores latentes satisfacen que 
+$$
+f_j\sim N(f_j|0,I_{k\times k})
+$$
+
+Marginalmente, las observaciones $x_j$ siguen una distribución normal de la forma 
+$$
+x_j|\lambda, \Sigma \sim N(x_i|0,\Omega) \qquad \forall \;j=1,2,\cdots, n
+$$
+
+# Ejercicio 1: Simulaciones mediante MCMC para 1 factor. 
+
+En esta sección se obtiene un análisis de factores para los datos del tipo de cambio utilizando un sólo factor. 
+
+## Simulaciones para la posterior de los parámetros 
+
+se obtienen 10,000 iteraciones para encontrar la matriz de cargas (en este caso vector de cargas) y el valor de $\Sigma$ (en este caso matriz diagonal de 80 valores). Notar que no existen restricciones en la matriz de cargas en este caso pues al tener un sólo factor no habrá problemas de identificabilidad. 
+
+
+```{r tc.factanal, include=TRUE}
+# No de itreaciones 
+M.sim <- 10000
+
+# periodo de calentamiento
+M.burn <- 50
+
+# Calcula la postrior para los datos de swiss
+posterior.tc1 <- MCMCfactanal(data_estand,
+                              factors=1,
+                              lambda.constraints=list(),
+                              verbose=0, store.scores=TRUE, 
+                              a0=1, b0=0.15,
+                              data=data, 
+                              burnin=M.burn, mcmc=M.sim, thin=20,seed=2348)
+
+```
+
+## Resultados de las simulaciones 
+
+### Histograma  de los valores simulados para los parámetros
+
+Veamos una muestra de los valores simulados para $\lambda$ y $\Sigma$. 
+```{r factor.plot.params, echo=TRUE,fig.width=10,fig.height=6}
+# Muestra de 10 países
+set.seed(12)
+aux<-sort(sample(colnames(data_estand)[2:80],10))
+
+# Indices para el vector de lambda y para el 
+# vector de sigma de los paises muestrados 
+ind1<-match(paste("Lambda",aux,"_1",sep=""),colnames(posterior.tc1))
+ind2<-match(paste("Psi",aux,sep=""),colnames(posterior.tc1))
+
+# Grafica de distribuciones
+plot(posterior.tc1[,c(ind1,ind2)])
+```
+
+Se puede notar que todas las cadenas son estables, por lo tanto se puede pensar que llegaron a su estado estacionario. En cuanto a la distribuciones de las simulaciones, ésta no es homogénea a lo largo de los diferentes paises muestreados, algunas distribuciones paraecen ser simétricas y otras sesgadas ligeramente a la izquierda o a la derecha. 
+
+### Resumen de los valores simulados para los parámetros 
+
+Veamos el resumen de las simulaciones de los parámetros. 
+
+```{r factor.summary, echo=TRUE}
+resumen1<-summary(posterior.tc1)
+```
+
+Para **$\Lambda$** tenemos lo siguiente: 
+```{r factor.summary.lambda, echo=TRUE}
+resumen.lambda<-cbind(resumen1$statistics[grep("Lambda",rownames(resumen1$statistics)),],
+                      resumen1$quantiles[grep("Lambda",rownames(resumen1$quantiles)),])
+
+kable(resumen.lambda,
+      format.args=list(size="tiny",scalebox=0.8),
+     type='latex',digits=3,
+      caption='Resumen de las simulaciones para la matriz de cargas')
+
+```
+
+Algunos países tienen carga positiva y otros tienen carga negativa. Intuitivamente podría pensarse que este signo está relacionado con el hecho de si la moneda se aprecia o deprecia en el tiempo respecto al dolar. 
+
+
+Veamos cuantos países tienen peso positivo y cuantos tienen peso negativo utilizando la mediana como estimador puntual. 
+
+
+Los países con peso positivo son: 
+```{r lambda.pos,echo=TRUE}
+lambdas<-resumen1$quantiles[grep("Lambda",rownames(resumen1$quantiles)),3]
+
+positivos<-substring(names(lambdas)[which(lambdas>0)],7)
+positivos<-substring(positivos, 1, nchar(positivos)-2)
+
+length(positivos)
+
+positivos
+
+```
+
+Tenemos `r length(positivos)` paises con carga positiva para los factores. No se puede generalizar que un sólo tipo de país tenga cargas positivas, es decir, tenemos tanto países desarrollados (EU, Suecia, Francia, etc) como países en vías de desarrollo (México, Panamá, India, etc), países de LA, Zona Euro, Asia, etc. 
+
+Los países con peso negativo son: 
+```{r lambda.neg,echo=TRUE}
+negativos<-substring(names(lambdas)[which(lambdas<0)],7)
+negativos<-substring(negativos, 1, nchar(negativos)-2)
+
+length(negativos)
+
+negativos
+
+```
+
+Se tienen `r length(negativos)` paises con carga negativa. tampoco es posible generalizar que un sólo tipo de país tenga cargas negativas, pero si se puede destacar que son más los países con carga positiva que negativa. 
+
+
+Para **$\Sigma$** tenemos que 
+```{r factor.summary.sigma}
+resumen.sigma<-cbind(resumen1$statistics[grep("Psi",rownames(resumen1$statistics)),],
+                      resumen1$quantiles[grep("Psi",rownames(resumen1$quantiles)),])
+
+kable(resumen.sigma,
+      format.args=list(size="tiny",scalebox=0.8),
+     type='latex',digits=3,
+      caption='Resumen de las simulaciones para la matriz de varianzas $\\Sigma$')
+
+```
+
+ Todas las medias para las simulaciones de los valores de la matriz $\Sigma$ son positivas (como se esperaba) y varían desde 0.01 hasta 1 aproximadamente. 
+ 
+ 
+## Factor Latente
+
+
+Por último, hagamos un análisis de los factores obtenidos. Veamos la distribución de los valores simulados para los factores para algunas observaciones. 
+
+```{r factor.plot.phi,echo=TRUE, fig.height=6,fig.width=10}
+# Muestra de 10 observaciones
+set.seed(12)
+aux<-sort(sample(1:nrow(data_estand),10))
+
+# Indices para el vector de phi's a examinar
+ind<-match(paste("phi_",aux,"_1",sep=""),colnames(posterior.tc1))
+
+# Grafica de distribuciones
+plot(posterior.tc1[,ind])
+
+```
+
+Todas las cadenas de las simulaciones de los factores parecen estar convirgiendo. Las distribuciones de los factores en cada observación no son centradas y tienen al menos una cola pesada. Se obtienen valoes tanto positivos como negativos para el factor latente. 
+
+
+De hecho, este factor podría pensarse como un índice de los tipos de cambio respecto al dólar a lo largo del tiempo. Veamos los primeros valores simulados.
+
+
+```{r factor.summary.phi}
+resumen.factores<-cbind(resumen1$statistics[grep("phi",rownames(resumen1$statistics)),],
+                      resumen1$quantiles[grep("phi",rownames(resumen1$quantiles)),])
+
+kable(head(resumen.factores,10),
+      format.args=list(size="tiny",scalebox=0.8),
+     type='latex',digits=3,
+      caption='Resumen de las simulaciones para el factor latente')
+
+```
+
+
+```{r}
+aux<-data_frame(id=1:nrow(resumen.factores),
+                median=resumen.factores[,7])
+
+ggplot(aux,aes(x=id,y=median))+theme_bw()+
+  geom_line(color='royalblue1')+geom_hline(yintercept=0,lty=2,col='red')+
+  ggtitle('Factor Latente para el Ejercicio 1')+
+  theme(plot.title = element_text(hjust=0.5))
+```
+
+El factor latente es negativo para los primeros 224 meses de la muestra y positivo después de este punto. La  gráfica anterior muestra la serie de tiempo de la mediana del factor latente. Esto refleja que el dólar se apreció respecto al resto de las monedas desde el inicio de la muestra y hasta inicios del 2009 para posteriormente presentar una depreciación hacia el final de la muestra. 
+
+
+# Ejercicio 2: Simulaciones mediante MCMC para 2 factores. 
+
+En esta sección se obtiene un análisis de factores para los datos del tipo de cambio utilizando dos factores. 
+
+## Simulaciones para la posterior de los parámetros 
+
+Se obtienen 10,000 iteraciones para encontrar la matriz de cargas (en este caso vector de cargas) y el valor de $\Sigma$ (en este caso matriz diagonal de 80 valores). Notar que sólo se debe imponer una restricción en la matriz de cargas pues ésta tiene 2 columnas. 
+
+```{r tc.factanal2, include=TRUE}
+# No de itreaciones 
+M.sim <- 10000
+
+# periodo de calentamiento
+M.burn <- 50
+
+# Calcula la postrior para los datos de swiss
+posterior.tc2 <- MCMCfactanal(data_estand,
+                                factors=2,
+                                lambda.constraints=list(Canada=c(2,0)),
+                                verbose=0, store.scores=TRUE, 
+                                a0=1, b0=0.15,
+                                data=data_estand, 
+                                burnin=M.burn, mcmc=M.sim, thin=20,seed=2348)
+
+```
+
+## Resultados de las simulaciones 
+
+### Histograma de los valores simulados para los parámetros
+
+Veamos una muestra de los valores simulados para $\lambda$ y $\Sigma$. 
+```{r factor.plot.params2, echo=TRUE,fig.width=10,fig.height=6}
+# Muestra de 10 países
+set.seed(12)
+
+aux<-sort(sample(colnames(data_estand)[2:80],10))
+
+# Indices para el vector de lambda y para el 
+# vector de sigma de los paises muestrados 
+ind1<-match(paste("Lambda",aux,"_1",sep=""),colnames(posterior.tc2))
+ind2<-match(paste("Lambda",aux,"_2",sep=""),colnames(posterior.tc2))
+ind3<-match(paste("Psi",aux,sep=""),colnames(posterior.tc2))
+
+# Grafica de distribuciones
+plot(posterior.tc2[,c(ind1,ind2,ind3)])
+```
+
+Se puede notar que no todas todas las cadenas son estables, algunas llegaron a su estado estacionario pero otras muestran tendencia. Sin embargo, esto es en menor medida que cuando se utilizaron los datos no estandarizados. En cuanto a la distribuciones de las simulaciones, esta no es tan homogénea como en el caso anterior. De hecho las cadenas que muestran tendencia son las que presentan "chipotes" en las distribuciones. Podría ser útil aumentar el no. de simulaciones. 
+
+### Resumen de los valores simulados para los parámetros 
+
+Veamos el resumen de las simulaciones de los parámetros. 
+
+```{r factor.summary2, echo=TRUE}
+resumen2<-summary(posterior.tc2)
+```
+
+Para **$\Lambda$** tenemos lo siguiente: 
+```{r factor.summary.lambda2, echo=TRUE}
+resumen.lambda.1<-cbind(resumen2$statistics[grep(regex("Lambda.+\\_1"),rownames(resumen2$statistics)),],
+                      resumen2$quantiles[grep(regex("Lambda.+\\_1"),rownames(resumen2$quantiles)),])
+
+kable(resumen.lambda.1,
+      format.args=list(size="tiny",scalebox=0.8),
+     type='latex',digits=3,
+      caption='Resumen de las simulaciones para las cargas del primer factor')
+
+resumen.lambda.2<-cbind(resumen2$statistics[grep(regex("Lambda.+\\_2"),rownames(resumen2$statistics)),],
+                      resumen2$quantiles[grep(regex("Lambda.+\\_2"),rownames(resumen2$quantiles)),])
+
+kable(resumen.lambda.2,
+      format.args=list(size="tiny",scalebox=0.8,scalebox=0.8),
+     type='latex',digits=3,
+      caption='Resumen de las simulaciones para las cargas del segundo factor')
+
+```
+
+Nuevamente se tienen valores positivos y negativos en la matriz de cargas para ambos factores. 
+
+Para **$\Sigma$** tenemos que 
+```{r factor.summary.sigma2,echo=TRUE}
+resumen.sigma<-cbind(resumen2$statistics[grep("Psi",rownames(resumen2$statistics)),],
+                      resumen2$quantiles[grep("Psi",rownames(resumen2$quantiles)),])
+
+kable(resumen.sigma,
+      format.args=list(size="tiny",scalebox=0.8),
+     type='latex',digits=3,
+      caption='Resumen de las simulaciones para la matriz de varianzas $\\Sigma$')
+
+```
+
+Los valore para $\Sigma$ van desde 0.01 hasta 1 al igual que en ejercicio 1. Esto era de esperarse pues hay economías con mayor variabilidad en su tipo de cambio. 
+
+## Factores Latentes 
+
+Por último, hagamos un análisis de los factores obtenidos. Veamos la distribución de los valores simulados para los factores para algunas observaciones. 
+
+```{r factor.plot.phi2,echo=TRUE, fig.height=6,fig.width=10}
+# Muestra de 10 observaciones
+set.seed(12)
+aux<-sort(sample(1:nrow(data_estand),10))
+
+# Indices para el vector de phi's a examinar
+ind1<-match(paste("phi_",aux,"_1",sep=""),colnames(posterior.tc2))
+ind2<-match(paste("phi_",aux,"_2",sep=""),colnames(posterior.tc2))
+
+# Grafica de distribuciones
+plot(posterior.tc2[,c(ind1,ind2)])
+
+```
+
+Las densidades de los factores son muy distintas entre si, pero se caracterizan por tener al menos una cola pesada e incluso algunas presentan "chipotes". Veamos los primeros valores simulados para cada factor:
+
+```{r factor.summary.phi2}
+resumen.factores.1<-cbind(resumen2$statistics[grep(regex("phi.+\\_1"),rownames(resumen2$statistics)),],
+                      resumen2$quantiles[grep(regex("phi.+\\_1"),rownames(resumen2$quantiles)),])
+
+kable(head(resumen.factores.1,10),
+      format.args=list(size="tiny",scalebox=0.8),
+     type='latex',digits=3,
+      caption='Resumen de las simulaciones para el primer factor latente')
+
+resumen.factores.2<-cbind(resumen2$statistics[grep(regex("phi.+\\_2"),rownames(resumen2$statistics)),],
+                      resumen2$quantiles[grep(regex("phi.+\\_2"),rownames(resumen2$quantiles)),])
+
+kable(head(resumen.factores.2,10),
+      format.args=list(size="tiny",scalebox=0.8),
+      type='latex',digits=3,
+      caption='Resumen de las simulaciones para el segundo factor latente')
+```
+
+El primer factor tiene valores positivos y negativos a lo largo del periodo muestral y el segundo factor es negativo al inicio y positivo posteriormente. 
+
+Graficamos la mediana para analizar los dos factores por completo.
+```{r}
+aux<-data_frame(id=1:nrow(resumen.factores),
+                f1=resumen.factores.1[,7],
+                f2=resumen.factores.2[,7])%>%
+  gather(Factor, Valor, f1:f2)
+
+
+ggplot(aux,aes(x=id,y=Valor,color=Factor))+theme_bw()+
+  geom_line()+geom_hline(yintercept=0,lty=2,col='red')+
+  facet_grid(~Factor)+
+  ggtitle('Factores Latentes para el Ejercicio 2')+
+  theme(plot.title = element_text(hjust=0.5))
+```
+
+Al estandarizar los datos con la media y desviación estandar anual, los factores simulados se ven completamente diferentes al caso donde no se estandarizaron los datos. Ambos factores parecieran ser ruido blanco. 
+
+
+# Comparación del primer factor 
+
+En este apartado comparamos el primer factor del Ejercicio 1 con el primer factor del Ejercicio 2 tomando como estimador puntual la mediana de los factores simulados. 
+
+```{r}
+plot.f1<-data_frame(f1_1factor=resumen.factores[,7],
+                    f1_2factores=resumen.factores.1[,7])
+
+ggplot(plot.f1,aes(x=f1_1factor,y=f1_2factores))+theme_bw()+
+  geom_point()+
+  geom_abline(slope=1,intercept=0,col='red')+
+  ggtitle('Grafico de dispersion del primer factor para ambos ejercicios')+
+  theme(plot.title = element_text(hjust=0.5))
+```
+
+Claramente, el primer factor del Análsiis de factores con 1 factor y el primer factor del Análisis de Factores con 2 factores no son iguales, de serlo esperaríamos ver los puntos al rededor de la recta de 45 grados. Para las primeras observacioens de la muestra pareciera que el primer factor, del analisis con 1 factor, es menor que el primer factor, del análisis con 2 facotres, y lo contrario ocurre para el final de la muestra. 
+
+```{r}
+plot.f1<-data_frame(id=1:nrow(resumen.factores),
+                    f1_1factor=resumen.factores[,7],
+                    f1_2factores=resumen.factores.1[,7])%>%
+  gather(Factor, Valor, f1_1factor:f1_2factores)
+
+ggplot(plot.f1,aes(x=id,y=Valor, color=Factor))+theme_bw()+
+  geom_line()+
+  geom_hline(yintercept=0,col='gray50',lty=2)+
+  ggtitle('Serie de tiempo del primer factor para ambos ejercicios')+
+  theme(plot.title = element_text(hjust=0.5))
+```
+
+En efecto uno de los factores captura mayor variablidad que el otro. 

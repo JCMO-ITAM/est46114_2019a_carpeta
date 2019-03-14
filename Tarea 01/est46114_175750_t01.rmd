@@ -1,0 +1,177 @@
+---
+title: "Tarea 01"
+author:
+-  "Víctor Augusto Samayoa Donado"
+-  "CVu: 175750"
+date: "Febrero 12, 2019"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: yes
+    self_contained: yes
+    theme: flatly
+    highlight: textmate
+fig_align: "center"
+fig_width: 18
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Se cargan las librerias a utilizar
+library(fields)
+library(mnormt)
+library(MCMCpack)
+library(actuar)
+library(tidyverse)
+library(kernlab)
+library(readxl)
+
+# Se cargan los datos a utilizar
+data <- read_xls("est46114_s06_data.xls") %>% 
+        select(-Date)
+```
+
+# Inciso 1 {.tabset .tabset-fade .tabset-pills}
+
+Se procede a realizar la implementación del procedimiento inferencial PCA considerando distribuciones iniciales no informativas para $\mu$ y $\Lambda$.
+
+```{r}
+# Simulación
+a0 <- 1
+s0 <- 1
+m0 <- matrix(0,ncol=1,nrow=ncol(data))
+B0 <- diag(1,ncol=ncol(data),nrow=ncol(data)) 
+
+gaussian.posterior <- function(data,m0,s0,a0,B0){
+  xbar <- as.matrix(colMeans(data))
+  S <- cov(data)
+  n <- nrow(data)
+  p <- ncol(data)
+  # Posterior hiperparameters
+  sn <- s0 + n
+  an <- a0 + n/2
+  mn <- (s0*m0 + n*xbar)/sn
+  Bn <- B0 + (n/2)*(S + (s0/sn)*(xbar-m0)%*%t(xbar-m0))
+  # Output
+  output <- list(mn,sn,an,Bn)
+  return(output)
+}
+
+output <- gaussian.posterior(data,m0,s0,a0,B0)
+
+M <- 10000
+mu.sim <- matrix(NA,nrow=M, ncol=ncol(data))
+Lambda.sim <- array(NA,dim=c(M,ncol(data),ncol(data)))
+e.sim <- matrix(NA,nrow=M, ncol=ncol(data))
+V.sim <- array(NA,dim=c(M,ncol(data),ncol(data)))
+C.sim <- array(NA,dim=c(M,nrow(data),ncol(data)))
+m <- 1;
+X <- as.matrix(data)
+
+set.seed(95396)
+for(m in 1:M){
+  # Simulacion (mu,Lambda)
+  Lambda.sim[m,,] <- rWishart(1, output[[3]], output[[4]])
+  mu.sim[m,] <- mvrnorm(1, mu=output[[1]], Sigma=solve(output[[2]]*Lambda.sim[m,,]), tol = 1e-6)
+  # Simulacion (e,V) + C
+  eigen_aux <- eigen(solve(Lambda.sim[m,,]))
+  e.sim[m,] <- eigen_aux$values
+  V.sim[m,,] <- eigen_aux$vectors
+  C.sim[m,,] <- X %*% V.sim[m,,]
+}
+```
+
+En este caso se realizaron 10,000 iteraciones en la simulación la el procedimiento inferencial.
+
+Primero, se procede a realizar un análisis de la distribución de los valores propios con el objetivo de determinar cómo poder ordenarlos.
+
+```{r, fig.height = 20}
+as_tibble(e.sim) %>% 
+  gather(key = lambda, value = valor) %>%
+  group_by(lambda) %>% 
+  mutate(mediana = median(valor)) %>% 
+  ungroup() %>% 
+  ggplot(aes(x = reorder(lambda, mediana), y = valor)) +
+  geom_boxplot(outlier.colour = "firebrick") +
+  labs(title = "Distribución de valores propios para las simulaciones",
+       x = "Eigenvalor",
+       y = "Valor") +
+  coord_flip()
+
+```
+
+De la gráfica anterior, se puede apreciar que los eigenvalores de mayor valor son los que también presentan una mayor dispersión, esto es, una menor consistencia en las estimaciones.
+
+Se puede decir que el eigenvector $V1$ pertenece al Top5 de los eigenvalores, sin embargo no podemos aifrmar que sea el mayor de todos. Lo mismo sucede con los demás eigenvalores.
+
+Por tal motivo, y para efectos prácticos, se considerará el valor de la mediana para cada distribución de eigenvalores para determinar la posición de cada uno y de esta forma determinar las primeras componentes principales.
+
+# Inciso 2 {.tabset .tabset-fade .tabset-pills}
+
+Para determinar las economias que tienen mayor peso en la descomposición PCA, se utilizará el criterio de qué país tiene mayor peso en cada una de las componentes y se reportara el país para dicha componente. En el entendido que las primeras componentes son las que tienen un peso mayor global.
+
+```{r}
+paises <- tibble(position = 1:80,
+                  pais = colnames(data))
+
+componentes <- map_dfr(1:80, function(pais) {
+  map_dfr(1:80, function(pc) {
+    tibble(principal_component = pc,
+           valor = mean(V.sim[,pais, pc]))
+  }) %>% 
+    mutate(pos_pais = pais)
+})
+
+componentes %>% 
+  arrange(principal_component) %>% 
+  group_by(principal_component) %>% 
+  summarise(position = pos_pais[which(valor == max(valor))]) %>% 
+  inner_join(paises, by = "position") %>% 
+  DT::datatable()
+```
+
+# Inciso 3 {.tabset .tabset-fade .tabset-pills}
+
+A continuación de muestra la distribución de los valores de las componentes sobre todas las observaciones:
+
+```{r}
+desv_componentes <- map_dfr(1:80, function(variable){
+  mean_var <- map_dbl(1:492, function(obs) {
+    mean(C.sim[, obs, variable])
+  })
+  tibble(componente = variable,
+         promedio = mean_var)
+})
+
+desv_componentes %>% 
+  arrange(componente) %>% 
+  mutate(lambda = paste0("C", componente)) %>% 
+  ggplot(aes(x = reorder(lambda, -componente), y = promedio)) +
+  geom_boxplot(outlier.colour = "firebrick") +
+  labs(title = "Distribución de los valores de las componentes sobre todas las observaciones",
+       x = "Componente",
+       y = "Valor") +
+  coord_flip()
+```
+
+Como puede apreciarse las componetnes 78 y 79 son las que presentan una mayor inconsistencia.
+
+A partir de la gráfica de eigenvalores, determinamos observar el comportamiento de las primeras 30 componentes:
+
+```{r}
+desv_componentes %>% 
+  filter(componente <= 30) %>% 
+  arrange(componente) %>% 
+  mutate(lambda = paste0("C", componente)) %>% 
+  ggplot(aes(x = reorder(lambda, -componente), y = promedio)) +
+  geom_boxplot(outlier.colour = "firebrick") +
+  labs(title = "Distribución de los valores de las componentes sobre todas las observaciones",
+       x = "Componente",
+       y = "Valor") +
+  coord_flip()
+```
+
+Se puede apreciar que las primeras componentes son, en términos generales, las más consistentes. 

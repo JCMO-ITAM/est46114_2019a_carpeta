@@ -1,0 +1,261 @@
+---
+title: EST-46114 Métodos Multivariados y Datos Categóricos
+subtitle: Sesion 10 - Analisis de Factores - Parte 3/3
+author: Juan Carlos Martinez-Ovando
+institute: Maestria en Ciencia de Datos
+titlegraphic: /svm-r-sources/ITAM2016.png
+fontsize: 10pt
+output:
+ beamer_presentation:
+    template: ~/svm-r-sources/svm-latex-beamer.tex
+    keep_tex: true
+# toc: true
+    slide_level: 2
+ ioslides_presentation:
+    smaller: true
+    logo: ~/svm-r-sources/ITAM2016.png
+make149: true
+---
+
+<style>
+slides > slide.backdrop {
+  background: white;
+  border-bottom: 0px;
+  box-shadow: 0 0 0;
+}
+
+
+slides > slide {
+  font-family: 'Open Sans', Helvetica, Arial, sans-serif;
+  border-bottom: 3px solid  #F66733;
+  box-shadow:  0 3px 0 #522D80;
+
+}
+
+.title-slide hgroup h1 {
+  color: #522D80;
+}
+
+h2 {
+
+  color: #522D80;
+}
+
+slides > slide.dark {
+  background: #522D80 !important;
+  border-bottom: 0;
+  box-shadow: 0 0 0;
+}
+
+.segue h2 {
+  color: white;
+}
+
+slides > slide.title-slide {
+  border-bottom: 0;
+  box-shadow: 0 0 0;
+}
+
+ol, ul {
+
+padding-bottom: 10px;
+
+}
+
+</style>
+
+
+# Objetivos
+
+Objetivos
+---
+
+* Revisaremos procedimientos para su implementacion.
+
+```{r libraries, message=FALSE, warning=FALSE, include=FALSE}
+if(!require("bayesdfa")){install.packages("bayesdfa")}
+library("bayesdfa")
+if(!require("ggplot2")){install.packages("ggplot2")}
+library("ggplot2")
+if(!require("dplyr")){install.packages("dplyr")}
+library("dplyr")
+```
+
+Datos
+---
+
+```{r data_prep, echo=FALSE}
+data <- read.csv("est46114_s06_data.csv")
+data <- as.data.frame(data)
+data <- as.matrix(data)
+T <- nrow(data)
+p <- ncol(data)
+Ty <- T/12
+datats <- ts(data[,3:p],start=c(1970, 1), end=c(2010, 12), frequency=12)
+years <- seq(1970,2010,1)
+meansts <- NA * datats[c(1:41),]
+t <- 1
+for(t in 1:Ty){
+  meansts[t, ] <- colMeans(data[which(data[,"Year"]==years[t]),3:p])
+}
+# Auxiliares
+rep.row<-function(x,n){
+   matrix(rep(x,each=n),nrow=n)
+}
+rep.col<-function(x,n){
+   matrix(rep(x,each=n), ncol=n, byrow=TRUE)
+}
+# ---
+datatsc <- datats
+t <- 1
+for(t in 1:Ty){
+  datatsc[which(data[,"Year"]==years[t]),] <- datats[which(data[,"Year"]==years[t]),] - rep.row(meansts[t, ],12)
+}
+# Data 4 class
+datatsc.class <- datatsc[,c("Canada","Mexico")]
+datats.class <- datats[,c("Canada","Mexico")]
+
+plot(datats.class)
+```
+
+---
+
+```{r data.plot.1, echo=FALSE}
+plot(datatsc.class)
+```
+
+---
+
+```{r data.plot.2, echo=FALSE}
+matplot(datatsc.class,
+  type = "l",
+  ylab = "Response", xlab = "Time"
+)
+```
+
+Datos.sim
+---
+
+```{r data.sim, echo=FALSE}
+set.seed(33)
+data.sim <- sim_dfa(num_trends = 2, 
+                    num_years = 500, 
+                    num_ts = 3)
+data.sim.ts <- ts(t(data.sim$y_sim), start = c(1970,1),frequency = 12)
+plot(data.sim.ts)
+``` 
+
+Libreria 1
+---
+
+**bayesdfa**
+
+En `R` puede trabajarse con la libreria `bayesdfa` ([link](https://github.com/fate-ewi/bayesdfa)).
+
+Antes de instalar en Windows o OSX, instalen [Rtools](https://cran.rstudio.com/bin/windows/Rtools/). Despues, sugiero instalar la version en desarrollo:
+
+```
+install.packages("devtools")
+devtools::install_github("fate-ewi/bayesdfa")
+```
+
+Seleccion la opcion `4` durante la instalacion.
+
+```{r bayesdfa, include=FALSE}
+if(!require("rstan")){install.packages("rstan")}
+suppressMessages(library("rstan"))
+if(!require("bayesdfa")){install.packages("bayesdfa")}
+suppressMessages(library("bayesdfa"))
+```
+La libreria se desarrolla en [Stan](https://mc-stan.org/users/documentation/tutorials), una suite que implementa metodos numericos basados en el metodo *Hamiltonian Monte Carlo* y algoritmos relacionados.
+
+\textcolor{blue}{Nota: La instalacion se tarda un rato... Vayan por cafecito...}
+
+Libreria 2
+---
+
+**factorstochvol**
+
+En `R` puede trabajarse con la libreria `bayesdfa` ([link](https://github.com/cran/factorstochvol)).
+
+```{r factrostochvol, include=FALSE}
+if(!require("factorstochvol")){install.packages("factorstochvol")}
+suppressMessages(library("factorstochvol"))
+```
+
+# Modelo dinamico
+
+Racionalidad
+---
+
+Como hemos discutido, para un numero $k$ fijo, el modelo de $k$ factores
+\begin{eqnarray}
+x_t|f_t &\sim& \text{N}(x|\lambda f_t,\Sigma) \nonumber \\
+f_t &\sim^{iid}&\text{N}(f_t|0,I_k),\nonumber
+\end{eqnarray}
+esta completamente especificado por el par
+$$
+(\lambda,\Sigma),
+$$
+considerado constante oara todo $t$.
+
+El unico aspecto cambiante entre observaciones es $f_t$, los factores latentes.
+
+Especificacion 1/
+---
+
+Modelos
+---
+
+Resumen de la informacion generada para dos modelos:
+
+```
+{r fa.trend.models, echo=FALSE}
+data.sim.ts.models <- find_dfa_trends(
+  y = data.sim.ts, iter = 300,
+  kmin = 1, kmax = 2, 
+  chains = 1, compare_normal = FALSE,
+  variance = "equal", convergence_threshold = 1.1,
+  control = list(adapt_delta = 0.95, max_treedepth = 20))
+
+data.sim.ts.models$summary
+```
+
+Una especificacion
+---
+
+# Modelo dinamico de factores
+
+
+# Volatilidad estocastica
+
+Modelo dinamico de factores de volatilidad estocastica
+---
+
+El modelo propuesto por Pitt & Shephard (1999) es uno de varias alternativas para describir la dinamica temporal en datos $p$-dimensionales. Consideremos $k$ (numero de factores) fijo,
+\begin{eqnarray}
+\boldsymbol{x}_t|f_t & \sim & \text{N}(x|\lambda f_t,\textcolor{red}{\Sigma_t}) \nonumber \\
+f_t &\sim& \text{N}(f|\boldsymbol{0},\textcolor{red}{H_t}),\nonumber
+\end{eqnarray}
+con
+\begin{eqnarray}
+\nu_{it} \sim \text{N}(\alpha_i+\gamma_i \nu_{i,t-1},\psi_{i})\nonumber \\
+\lambda_{jt} \sim \text{N}(\mu_j+\gamma_i \phi_{j,t-1},\psi_{i})\nonumber \\
+\end{eqnarray}
+
+
+# Complementos
+
+Siguiente sesion
+---
+
+* 
+
+Lectura complementaria
+---
+
+* Stock & Watson (2002) *Forecasting using principal components from a large number of predictors.* `est46114_s08_suplemento1.pdf`
+
+* West (2003) *Bayesian factor regression models in the "large p, small n" paradigm.* `est46114_s08_suplemento2.pdf`
+
+* Pitt & Shephard (1999) *Time varying covariances: A factor stochastic volatility approach.* `est46114_s08_suplemento3.pdf`

@@ -1,0 +1,82 @@
+---
+title: "tarea_02"
+author: "Allan Rosas 160630"
+date: "Febrero 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(scipen=999)
+```
+
+est46114_160630
+
+cargamos las librerias que seran usadas
+
+```{r, warning=FALSE, message=FALSE}
+library(readxl)      # Para leer archivos de excel
+library(dplyr)       # Para manipular datos
+library(tibble)      # Para manipular datos
+library(ggplot2)     # Para visualizar datos
+library(tidyr)       # Para transformar datos
+library(ggcorrplot)  # Para visualizar matrices de correlacion
+library(psych)       # Para hacer analisis factorial
+```
+
+Cargamos los datos
+```{r}
+datos<-read_excel('est46114_s06_data.xls') %>% 
+  select(-Date)
+```
+
+exploraremos algunos estadisticos importantes de las variables con boxplots e histogramas
+```{r, fig.height=10, warning=FALSE, message=FALSE}
+datos %>% 
+  gather(pais, valor) %>% 
+  ggplot(aes(x=pais,y=valor)) +
+  geom_boxplot() +
+  scale_y_log10() +
+  coord_flip() +
+  theme_bw()
+```
+
+```{r, fig.height=10, warning=FALSE, message=FALSE}
+datos %>% 
+  gather(pais, valor) %>%
+  ggplot(aes(valor)) +
+  geom_histogram() +
+  facet_wrap(~pais, scales = "free")
+```
+
+
+
+Calculamos la matriz de correlaciones y eigenvalores
+```{r}
+matriz_de_correlaciones <- cor(datos, use = "complete.obs")
+eigenvalores <- eigen(matriz_de_correlaciones)
+eigenvalores$values
+```
+
+para 1 factor
+```{r, warning=FALSE, message=FALSE}
+anlaisis_01_factor <- fa(datos)
+anlaisis_01_factor
+```
+
+para 2 factores
+```{r, warning=FALSE, message=FALSE}
+anlaisis_01_factor <- fa(datos,2)
+anlaisis_01_factor
+```
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,449 @@
+---
+title: EST-46114 Métodos Multivariados y Datos Categóricos
+subtitle: Sesion 05 - Analisis de Componentes Principales - Parte 1/3
+author: Juan Carlos Martinez-Ovando
+institute: Maestria en Ciencia de Datos
+titlegraphic: /svm-r-sources/ITAM2016.png
+fontsize: 10pt
+output:
+ beamer_presentation:
+    template: ~/svm-r-sources/svm-latex-beamer.tex
+    keep_tex: true
+# toc: true
+    slide_level: 2
+ ioslides_presentation:
+    smaller: true
+    logo: ~/svm-r-sources/ITAM2016.png
+make149: true
+---
+
+<style>
+slides > slide.backdrop {
+  background: white;
+  border-bottom: 0px;
+  box-shadow: 0 0 0;
+}
+
+
+slides > slide {
+  font-family: 'Open Sans', Helvetica, Arial, sans-serif;
+  border-bottom: 3px solid  #F66733;
+  box-shadow:  0 3px 0 #522D80;
+
+}
+
+.title-slide hgroup h1 {
+  color: #522D80;
+}
+
+h2 {
+
+  color: #522D80;
+}
+
+slides > slide.dark {
+  background: #522D80 !important;
+  border-bottom: 0;
+  box-shadow: 0 0 0;
+}
+
+.segue h2 {
+  color: white;
+}
+
+slides > slide.title-slide {
+  border-bottom: 0;
+  box-shadow: 0 0 0;
+}
+
+ol, ul {
+
+padding-bottom: 10px;
+
+}
+
+</style>
+
+
+Objetivos
+---
+
+* Estudiaremos los fundamentos del analsis de componentes principales muestrales (SPCA) y su forma de calculo.
+
+* Estudiaremos la intuicion geometrica / matricial destras del SPCA.
+
+* Realizaremos una ilustracion.
+
+```{r loading, include=FALSE}
+#if(!require("ripa")){install.packages("ripa", dependencies=c("Depends", "Suggests"))}
+#if(!require("EBImage")){source("http://bioconductor.org/biocLite.R"); biocLite("EBImage")}
+if(!require("fields")){install.packages("fields")}
+if(!require("mnormt")){install.packages("mnormt")}
+if(!require("MCMCpack")){install.packages("MCMCpack")}
+if(!require("actuar")){install.packages("actuar")}
+if(!require("ggplot2")){install.packages("ggplot2")}
+if(!require("kernlab")){install.packages("kernlab")}
+#library("ripa")
+#library("EBImage")
+library("fields")
+library("mnormt")
+library("MCMCpack")
+library("actuar")
+library("ggplot2")
+library("kernlab")
+```
+
+Usos
+---
+
+El _SPCA_ es una de las tecnicas de _ortogonalizacion_ y _reduccion de dimensionalidad_ mas empleada en la practica.
+
+Se emplea en diferentes contextos, por ejemplo:
+
+a. Ortogonalizar datos (matrices) para regresion (***)
+
+b. Definir modelos de regresion donde $Y=M\beta + \varepsilon$, donde $M$ es un conjunto de componentes de componentes principales de los datos originales $X$
+
+c. Procesamiento y reconstruccion de se\~nales e imagenes
+
+d. Construccion de indices (sobre todo en las ciencias sociales)
+
+e. Otras muchas aplicaciones...
+
+Intuicion
+---
+
+* El SPCA es una tecnica que comunmente se emplea para realizar **analisis exploratorio de datos** y **reduccion de dimensionalidad**
+
+* Usualmente, SPCA se asocia con el siguiente procedimiento
+
+> \textcolor{blue}{Tranformar un conjunto de observaciones multidimensionales y correlacionadas entre si, reemplazandolas por un numero de NUEVAS observaciones de dimension menor y no correlacionadas}
+
+* La interpretacion anterior no es enteramente correcta, pues SPCA es mas bien un procedimiento para la **ortogonalizacion de datos correlacionados** en la que
+
+> \textcolor{blue}{las nuevas variables son generadas mediante un procedimiento de rotacion de los datos originales, con cada componente dirigido hacia la dimension de los datos originales con la mayor variabilidad}
+
+SPCA y EDA
+---
+
+Supongamos que tenemos un conjunto de datos asociado con $p$ variables y $n$ observaciones, $$\boldsymbol{X}=(x_{j1},\ldots,x_{jp})_{j=1}^{n}.$$
+
+* La interrelacion entre estas $p$ variables podria visualizarse usando $\frac{p(p-1)}{2}$ diagramas de dispersion (esto solo para visualizar relaciones 1:1 entre las $p$ variables)
+
+* **Con SPCA puede obtenerse:**
+
+(a) un simplificacion de la informacion contenida en las variables originales, pero en una menor dimension, 
+
+(b) un resumen de las dimensiones/variables originales que comparan la mayor cantidad de informacion, asi como la cuantificacion relativa a tal informacion para cada variable
+
+Enfoques del SPCA
+---
+
+SPCA mapea la informacion de un espacio $p$-dimensional a otro de la misma dimension, i.e. $$\text{PCA}:(X_1,\ldots,X_p)\rightarrow(Z_1,\ldots,Z_p)$$ 
+
+--$X_j$s correlacionadas, mientras que $Z_j$s no correlacionadas--
+
+**Mapeo**
+El mapeo a $Z_j$ se obtiene como una **\textcolor{blue}{proyeccion lineal}**, $$Z_j=<\phi,X>=\phi'X=\sum_{i=1}^{p} \phi_{ji} X_i,$$
+con **pesos normalizados**, i.e. $<\phi,\phi> = 1$, siendo $(\phi_{j1},\ldots,\phi_{jp})$ el **vector de cargas** del $j$-esimo componente.
+
+**Formas de calculo del SPCA**
+
+1. Problema de optimizacion
+
+2. Descomposicion singular
+
+3. Descomposicion espectral
+
+SPCA | Problema de optimizacion
+---
+
+Considerando un conjunto de datos en forma matricial $\boldsymbol{X}=(X_{ij})_{i=1,j=1}^{n,p}$ de dimension $n\times p$  (considerando $n >> p$)
+
+La construccion del SPCA se obtiene como la solucion de un **problema de optimizacion**, donde:
+
+* El **primer componente principal** se define como la solucion a 
+$$
+\max_{\phi_{11},\ldots,\phi_{1p}}\left\{\frac{1}{n}\sum_{i=1}^{n}\left(\sum_{j=1}^{p}\phi_{1j}x_{ij}\right)^{2}\right\}
+\text{ s.a. }
+\sum_{j=1}^{p}\phi_{1j}^2=1.
+$$
+
+* Los componentes subsecuentes, $\phi_2,\ldots,\phi_p$ se definen solucion la funcion objetivos sujeto a las restricicones anidadas, $<\phi_j,\phi_k>=0$ para $k=1,\ldots,(p-1).$ 
+
+**Nota:** Se supone que las $X_{ij}$s son estandarizadas, de manera que $\frac{1}{n}\sum_{i=1}^{n}X_{ij}=0$.
+
+SPCA | Descomposicion singular
+---
+
+Partiendo de la matris de datos, $\boldsymbol{X}$, podemos considerar la descomposicion en valores singulares dado por,
+$$
+\boldsymbol{X}_{(n\times p)}=\boldsymbol{U}_{(n\times n)}\boldsymbol{S}_{(n\times p)}\boldsymbol{V}_{(p\times p)},
+$$
+donde
+
+* $\boldsymbol{S}_{(n\times p)}$ es una matriz rectangular con valores singulares en la diagonal correspondientes a $(\boldsymbol{X}'\boldsymbol{X})$ y $(\boldsymbol{X}\boldsymbol{X}')$
+
+* $\boldsymbol{V}_{(p\times p)}$ es una matrixz ortogonal con vectores columnas correspondientes a los `eigenvectores derechos` de $\boldsymbol{S}_{(n\times p)}$ (a.k.a. los vectores $\phi_j$s)  
+
+SPCA | Descomposicion espectral
+---
+
+Podemos considerar la matriz muestral asociada con $\boldsymbol{X}$, i.e.
+$$
+\boldsymbol{\Sigma}=\frac{1}{n}(\boldsymbol{X}'\boldsymbol{X})^{-1}.
+$$
+Junto con ella, la descomposicion espectral,
+$$
+\boldsymbol{\Sigma}=\boldsymbol{\Phi}\boldsymbol{\Lambda}\boldsymbol{\Phi}^{-1},
+$$
+en `eigenvalores`, $\boldsymbol{\Lambda}=\text{diag}\{\lambda_1,\ldots,\lambda_p\}$, y `eigenvectores`, $\boldsymbol{\Phi}=(\phi_1,\ldots,\phi_p)$.
+
+SPCA | Supuestos
+---
+
+* **Linealidad:** La nueva base es una combinación lineal de la base original
+
+* **Suficiencia:** La media y la varianza son estadísticas suficientes. PCA supone que estas estadísticas describen totalmente la distribución de los datos a lo largo del eje (es decir, la distribución normal).
+
+* **Variablidad:** Las grandes variaciones tienen una dinámica importante: alta varianza significa señal, baja varianza significa ruido. Esto significa que el PCA implica que la dinámica tiene una alta relación señal / ruido.
+
+* **Ortonormalidad:** Los componentes que se contruyen seran ortonormales, a.k.a. estocastimanete independientes y de norma unitaria
+
+Suponemos que la matriz de covarianza muestral de $X$ está dada por $\frac{1}{n}(X'X)$.
+
+
+SPCA | Intuicion 1/13
+---
+
+Consideremos el siguiente conjunto de datos
+
+```{r data, echo=TRUE}
+x <- c(2.5,.5,2.2,1.9,3.1,2.3,2,1,1.5,1.1)
+y <- c(2.4,0.7,2.9,2.2,3.0,2.7,1.6,1.1,1.6,.9)
+print("Covarianza")
+cov(x,y)
+```
+
+SPCA | Intuicion 2/13
+---
+
+```{r echo=FALSE}
+plot(x,y, xlim=c(-1,4), ylim=c(-1,4))
+abline(h=0,v=0,lty=3)
+```
+
+SPCA | Intuicion 3/13
+---
+
+```{r data_mean, echo=FALSE}
+x1 <- x - mean(x)
+y1 <- y - mean(y)
+
+plot(x1,y1)
+abline(h=0,v=0,lty=3)
+```
+
+SPCA | Intuicion 4/13
+---
+
+```{r data_var, echo=FALSE}
+print("Sample covariance matrix")
+m <- matrix(c(x1,y1),ncol=2)
+cov.m <- cov(m)
+cov.m
+det.m <- det(cov.m)
+print("Determinant")
+det.m
+```
+
+SPCA | Intuicion 5/13
+---
+
+```{r data_eigen, echo=FALSE}
+cov.eig <- eigen(cov.m)
+cov.eig
+print("Producto interior")
+cov.eig$vectors[,1] %*% cov.eig$vectors[,2]
+```
+
+SPCA | Intuicion 6/13
+---
+
+Visualizamos la descomposicion espectral. La \textcolor{red}{linea roja} representa el primer componente principal, la \textcolor{green}{linea verde} representa el segundo componente principal.
+
+```{r yx_plot_eigen, echo=FALSE}
+plot(x1,y1); abline(h=0,v=0,lty=3)
+abline(a=0,b=(cov.eig$vectors[1,1]/cov.eig$vectors[2,1]),col="red")
+abline(a=0,b=(cov.eig$vectors[1,2]/cov.eig$vectors[2,2]),col="green")
+```
+
+SPCA | Intuicion 7/13
+---
+
+* El **primer eigenvector** (\textcolor{red}{linea roja}) parece un ajuste lineal, que nos muestra como se relaciona con los datos, pero el otro vector propio no parece estar relacionado con los datos ... Por que?
+
+* Si nos fijamos en los **eigenvectores**, el primero es mucho mayor que el segundo: el **eigenvalor** mas grande identifica la componente principal del conjunto de datos.
+
+Una vez encontrados los **eigenvectores**, debemos ordenarlos coin base en sus **eigenvalores**. Esto nos da los componentes por orden de importancia! Podemos decidir ignorar los componentes con menor `significado`/`variabilidad capturada`, sin embargo, perderemos informacion pero no tanto si sus valores son pequenos.
+
+SPCA | Intuicion 8/13
+---
+
+En nuestro ejemplo en `2D`, solo tenemos dos opciones para ordenar los `eigenvalores`. Iluestremos este procedimiento:
+
+```{r yx_eigen_orden, echo=FALSE}
+# un componente
+f.vector1 <- as.matrix(cov.eig$vectors[,1],ncol=1)
+f.vector1
+# dos componentes
+f.vector2 <- as.matrix(cov.eig$vectors[,c(1,2)],ncol=2)
+f.vector2
+```
+
+SPCA | Intuicion 9/13
+---
+
+Derivamos el nuevo conjunto de datos transformados. Si $X$ es el conjunto de `datos` originales y $P$ es el vector de atributos, entonces la transpuesta de los datos transformados es
+$X P'$ define a las nuevas variables:
+
+
+```{r echo=FALSE}
+# un vector
+final1 <- t(f.vector1) %*% t(m)
+# dos vectores
+final2 <- t(f.vector2) %*% t(m)
+final2
+# nueva matriz de covarianza
+cov(t(final2))
+```
+
+SPCA | Intuicion 10/13
+---
+
+Estos conjuntos de datos finales son los datos originales en términos de los vectores que elegimos, es decir, ya no estan sobre los ejes `x` y `y` originales, sino que utilizan los vectores propios elegidos como su nuevo eje.
+
+```{r echo=FALSE}
+# final1 unidimensional
+final1
+```
+
+SPCA | Intuicion 11/13
+---
+
+
+```{r echo=FALSE}
+# final2 bidimensional
+plot(final2[1,],final2[2,],ylim=c(-2,2));abline(h=0,v=0,lty=3)
+```
+
+SPCA | Intuicion 12/13
+---
+
+Recuperando los `vectores originales`...
+
+```{r echo=FALSE}
+# con todos los eigenvectores - recuperacion al 100% (como en final2)
+original.dataset2 <- t(f.vector2 %*% final2)
+original.dataset2[,1] <- original.dataset2[,1] + mean(x)
+original.dataset2[,2] <- original.dataset2[,2] + mean(y)
+original.dataset2
+```
+
+SPCA | Intuicion 13/13
+---
+
+**Operacion PCA**
+ 
+Recuperando los `vectores originales`...
+
+```{r echo=FALSE}
+plot(original.dataset2[,1],original.dataset2[,2],xlim=c(-1,4),ylim=c(-1,4))
+abline(h=0,v=0,lty=3)
+```
+
+Ilustracion `swiss` 1/
+---
+
+```{r include=FALSE}
+if(!require("tidyverse")){install.packages("tidyverse")}
+if(!require("readr")){install.packages("readr")}
+if(!require("psych")){install.packages("psych")}
+
+library("tidyverse") 
+library("readr") 
+library("psych") 
+```
+
+```{r echo=FALSE}
+data("swiss")
+pairs.panels(swiss, ellipses=F, scale=T, smooth=F, col=0)
+```
+
+Ilustracion `swiss` 2/
+---
+
+Usando la funcion `prcomp` de `r-base`...
+
+```{r echo=FALSE}
+swiss.pca <- prcomp(swiss, scale. = TRUE)
+summary(swiss.pca)
+ls(swiss.pca)
+```
+
+Ilustracion `swiss` 3/
+---
+
+Primeros tres componentes...
+
+```{r echo=FALSE}
+round(swiss.pca$rotation[, 1:3], 2)
+```
+
+Ilustracion `swiss` 4/
+---
+
+```{r echo=FALSE}
+biplot(swiss.pca, cex = 0.4)
+```
+
+Ilustracion `swiss` 5/
+---
+
+```{r echo=FALSE}
+plot(swiss.pca, type = "l", main = "")
+```
+
+Advertencias
+---
+
+* SPCA **no es invariante ante cambios de escala.**
+
+* SPCA es muestral, por lo que esta sesgado hacia la informacion en $\boldsymbol{X}$ y, en particular, respecto al error de estimacion de la matriz de varianzas y covarianzas, $\boldsymbol{S}$.
+
+* Aun cuando SPCA sea aplicado a un censo de poblacion, subyace la incertidumbre acerca de la estimacion de $\boldsymbol{S}$.
+
+* Las relaciones de asociacion en PCA y SPCA se suponen **lineales solamente**.
+
+Siguiente sesion
+---
+
+* Construir PCA incorporando **incertidumbre epistemica** (a.k.a. error de estimacion de la matriz de covarianzas)
+
+* Extender PCA para **objetos no matriciales** (e.g. `functional PCA for imagenes or documents`)
+
+* Definir PCA para datos `ralos` (i.e. `sparce data`, caso $n<<p$)      
+
+* Vincular PCA con `analisis de factores` y `analisis de correlacion canonica`
+
+Lectura complementaria
+---
+
+* Everitt & Hothorn (2006) "An Introduction to Multivariate Analysis with R" - Cap. 6
+
+* Izenman (2008) "Modern Multivariate Statistical Techniques" - Sec. 7.2-7.5
+
+Lectura extendida
+---
+
+* Johnstone & Lu (2004) *Sparse Principal Components Analysis*. `est46114_s05_suplemento.pdf`

@@ -1,0 +1,177 @@
+---
+title: "Tarea 2"
+author: "Francisco Acosta   183270"
+output: html_document
+---
+
+```{r librerias, message=FALSE}
+library(rio)
+library(tidyverse)
+library(MCMCpack)
+library(MASS)
+library(psych)
+```
+
+**Consideren los datos de tipo de cambio/USD de la sesión 09 (`est46114_s06_data.csv`).**
+
+```{r carga de datos}
+cambio <- import('est46114_s06_data.xls')
+cambio <- as_tibble(cambio)
+cambio <- cambio %>% dplyr::select(-Nicaragua)
+cambio
+```
+
+```{r generacion matriz}
+usd <- as.matrix(cambio[,2:80])
+rownames(usd) <- as.character(cambio[,1]$Date)
+usd <- usd[2:nrow(usd),] - usd[1:(nrow(usd)-1),]
+```
+
+## Pregunta 1
+**Apliquen el analisis de factores dinamicos en estos datos considerando que se recupere un solo factor (eliminando los paises con cambios en nivel significativo).**
+
+```{r calculo un factor}
+posterior.uno <- MCMCfactanal(usd, 
+                          factors=1,
+                          # lambda.constraints=list(Examination=list(1,"+"),
+                          #                         Examination=list(2,"-"), 
+                          #                         Education=c(2,0),
+                          #                         Infant.Mortality=c(1,0)),
+                          verbose=0, 
+                          store.scores=FALSE, 
+                          a0=1, 
+                          b0=0.15,
+                          data=usd, 
+                          burnin=500,
+                          mcmc=10000, 
+                          thin=20)
+```
+
+```{r resumen un factor}
+uno <- summary(posterior.uno)
+posiciones <-  grep('Lambda+', rownames(uno$statistics))
+regiones <- c(rep('América',19,), rep('Europa', 21), rep('Medio Oriente', 6), 
+             rep('Asia',16), rep('África', 17))
+
+resumen.uno <- tibble(pais=colnames(usd),
+                      region = regiones,
+                      media = uno$statistics[posiciones,1],
+                      quant25 = uno$quantiles[posiciones,1],
+                      quant975 = uno$quantiles[posiciones,5])
+resumen.uno
+```
+
+Graficándolo.
+
+```{r grafica_un_factor, fig.height=9, fig.width=5}
+resumen.uno %>% arrange(media) %>% 
+ggplot() +
+    theme_classic() +
+    geom_errorbarh(aes(y=pais, xmin=quant25, xmax=quant975, colour=region), 
+                   alpha=0.9) +
+    geom_point(aes(x=media, y=pais, colour = region), size=2)
+    
+```
+
+## Pregunta 2
+**Apliquen el analisis de factores dinamicos en estos datos considerando que se recuperen dos factores (eliminando los paises con cambios en nivel significativo).**
+
+```{r calculo dos factores}
+posterior.dos <- MCMCfactanal(usd, 
+                          factors=2,
+                          # lambda.constraints=list(Examination=list(1,"+"),
+                          #                         Examination=list(2,"-"), 
+                          #                         Education=c(2,0),
+                          #                         Infant.Mortality=c(1,0)),
+                          verbose=0, 
+                          store.scores=FALSE, 
+                          a0=1, 
+                          b0=0.15,
+                          data=usd, 
+                          burnin=500,
+                          mcmc=10000, 
+                          thin=20)
+```
+
+```{r resumen dos factores}
+dos <- summary(posterior.dos)
+posiciones1 <-  grep('Lambda(.+)_1', rownames(dos$statistics))
+posiciones2 <-  grep('Lambda(.+)_2', rownames(dos$statistics))
+
+
+resumen.dos <- tibble(pais=colnames(usd),
+                      region = regiones,
+                      f1_media = dos$statistics[posiciones1,1],
+                      f1_quant25 = dos$quantiles[posiciones1,1],
+                      f1_quant975 = dos$quantiles[posiciones1,5],
+                      f2_media = dos$statistics[posiciones2,1],
+                      f2_quant25 = dos$quantiles[posiciones2,1],
+                      f2_quant975 = dos$quantiles[posiciones2,5])
+resumen.dos
+```
+
+Y grafiquémoslo.
+
+```{r grafica_dos_factores}
+g2 <- resumen.dos %>% 
+    ggplot() +
+    theme_classic() +
+    geom_point(aes(x=f1_media, y=f2_media, colour = region),  size=2) +
+    geom_text(aes(x=f1_media, y=f2_media, label=pais, colour= region),
+              size=3, alpha=0.8)
+g2
+```
+
+¡Interesante! Y muy, muy similar a los resultados obtenidos por el análisis de PCA. Podemos examinar las regiones con más detalles usando facetas.
+
+```{r}
+g2 + facet_wrap(~region, scales='free') + guides(colour=FALSE)
+```
+
+## Pregunta 3
+
+**Comparen las distribuciones y niveles medios del primer factor del inciso anterior con el factor unico del primer inciso. Discutan que pasa con los niveles medios y la dispersion subyacente de estos dos factores.**
+
+Comparemos los valores.
+
+```{r comparacion factores, fig.height=9, fig.width=5}
+
+e1 <- resumen.uno %>% mutate(tipo='Un factor')
+e2 <- resumen.dos %>% 
+    mutate(media = f1_media,
+           quant25 = f1_quant25,
+           quant975 = f1_quant975,
+           tipo = 'Dos factores') %>% 
+    dplyr::select(pais, region, media, 
+                  quant25, quant975, tipo)
+comparacion <- full_join(e1,e2)
+
+ggplot(comparacion, aes(y = pais, x = media, colour=tipo)) +
+    theme_classic() +
+    geom_errorbarh(aes(xmin=quant25, xmax=quant975), alpha = 0.8) +
+    geom_point(size=2)
+   
+```
+
+Podemos ver que la media y la dispersión son muy similares, casi traslapándose totalmente. Las únicas excepciones son unos pocos países africanos (Cote d'Ivoire, Congo, China, Camerún, Benin y Senegal) y China. Esto no es de extrañar, pues si observamos la gráfica con los dos factores, es claro que estos países se distribuyen en ella variando en su segundo factor - es decir, sus características y variabilidad intrínseca difieren bastante del resto de los países, por lo que cuando el estudio se realiza con dos factores, estas características se asignan directamente al segundo factor. De cualquier forma, aun con esto los intervalos de confianza de 95% se parecen bastante y se traslapan, no habiendo ningún caso donde no se encuentren cerca.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

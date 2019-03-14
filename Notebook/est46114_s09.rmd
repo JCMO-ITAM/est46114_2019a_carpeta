@@ -1,0 +1,316 @@
+---
+title: EST-46114 Métodos Multivariados y Datos Categóricos
+subtitle: Sesion 09 - Analisis de Factores - Parte 2/3
+author: Juan Carlos Martinez-Ovando
+institute: Maestria en Ciencia de Datos
+titlegraphic: /svm-r-sources/ITAM2016.png
+fontsize: 10pt
+output:
+ beamer_presentation:
+    template: ~/svm-r-sources/svm-latex-beamer.tex
+    keep_tex: true
+# toc: true
+    slide_level: 2
+ ioslides_presentation:
+    smaller: true
+    logo: ~/svm-r-sources/ITAM2016.png
+make149: true
+---
+
+<style>
+slides > slide.backdrop {
+  background: white;
+  border-bottom: 0px;
+  box-shadow: 0 0 0;
+}
+
+
+slides > slide {
+  font-family: 'Open Sans', Helvetica, Arial, sans-serif;
+  border-bottom: 3px solid  #F66733;
+  box-shadow:  0 3px 0 #522D80;
+
+}
+
+.title-slide hgroup h1 {
+  color: #522D80;
+}
+
+h2 {
+
+  color: #522D80;
+}
+
+slides > slide.dark {
+  background: #522D80 !important;
+  border-bottom: 0;
+  box-shadow: 0 0 0;
+}
+
+.segue h2 {
+  color: white;
+}
+
+slides > slide.title-slide {
+  border-bottom: 0;
+  box-shadow: 0 0 0;
+}
+
+ol, ul {
+
+padding-bottom: 10px;
+
+}
+
+</style>
+
+
+# Objetivos
+
+Objetivos
+---
+
+* Revisaremos procedimientos para su implementacion.
+
+
+# Aprendizaje estadistico
+
+Parametros
+---
+
+Los parametros del modelo resultan en:
+
+* $\lambda$, matriz de cargas de dimension $(p\times k)$ 
+
+--aunque por la restriccion de identificabilidad, puede reducirse el numero de parametros efectivos--
+
+* $\Sigma$, matriz de dimension $(p\times p)$ con $p$ parametros efectivos
+
+> Recordemos que la coleccion $(\boldsymbol{f}_i)_{i=1}^{n}$ son *variables latentes*.
+
+Verosimilitud
+---
+
+La **verosimilitud extendida** para los parametros y variables latentes queda definida como
+$$
+lik\left(\lambda,\Sigma,(\boldsymbol{f}_i)_{i=1}^{n}|\text{datos}\right) \propto \prod_{i=1}^{n} \text{N}(\boldsymbol{x}_i|\lambda \boldsymbol{f}_i,\Sigma) \text{N}(\boldsymbol{f}_i|\boldsymbol{0},\boldsymbol{1}),
+$$
+con $\text{datos}=(\boldsymbol{x}_1,\ldots,\boldsymbol{x}_n)$.
+
+> La verosimilitud extendida debe analizarse empleando metodos numericos tanto en el paradigma bayesiano como frecuentista de inferencia.
+
+Aprendizaje frecuentista
+---
+
+* El reto, en este caso, consiste en maximizar $lik\left(\lambda,\Sigma,(\boldsymbol{f}_i)_{i=1}^{n}|\text{datos}\right)$ respecto a las variables latentes $(\boldsymbol{f}_i)_{i=1}^{n}$!!!
+
+* La libreria `psych` provee rutinas para realizar el analisis frecuentista. La funcion base en esta libreria es `factor.pa().`
+
+```{r psych, include=FALSE}
+if(!require("psych")){install.packages("psych")}
+library("psych")
+```
+
+
+Aprendizaje bayesiano 1/
+---
+
+En el caso bayesiano, se requiere dotar al modelo con distribuciones iniciales sobre los **parametros** $\lambda$ y $\Sigma$, mas no sobre $(\boldsymbol{f}_i)_{i=1}^{n}$ pues, por ser latentes, el modelo ya incorpora una distribucion para estas.
+
+**\textcolor{blue}{Especificacion}**
+
+Respecto a $\lambda$, podemos adoptar
+$$
+\lambda_{jl} \sim \text{N}(\lambda_{jl}|0,C_0), \text{ para }j\neq l,
+$$
+$$
+\lambda_{jj} \sim \text{N}(\lambda_{jj}|0,C_0)\mathbb{I}(\lambda_{jj}>0), \text{ para }j=1,\ldots,k.
+$$
+
+Respecto a $\Sigma$, se puede adoptar
+$$
+\sigma_{j}^2 \sim \text{GaInv}(\sigma_{j}^2|v_0/2,v_0s_0^2/2), \text{ para }j=1,\ldots,k,
+$$
+donde $s_0^2$ es la moda marginal de la varianza idiosincratica, y $v_0$ son grados de libertad fijos --ambos hiperparametros conocidos--.
+
+Aprendizaje bayesiano 2/
+---
+
+* La distribucion final para parametros y variables latentes no es calculable de manera analitica cerrada.
+
+* Eviten usar distribuciones iniciales vagas, en la medida de lo posible.
+
+* La distribucion final de los parametros y variables latentes se puede aproximar empleando metodos numericos.
+
+En `R` pueden usar confiadamente la libreria `MCMCpack`, que incluye una rutina que implementa el agoritmo *Markov chain Monte Carlo (MCMC)* para el modelo de factores, en la funcion `MCMCfactanal`.
+
+```{r MCMCpack, include=FALSE}
+if(!require("MCMCpack")){install.packages("MCMCpack")}
+library("MCMCpack")
+```
+
+# Ilustraciones
+
+Datos simulados 1/
+---
+
+```{r MASS, include=FALSE}
+if(!require("MASS")){install.packages("MASS")}
+library("MASS")
+```
+
+Simulamos datos con la siguiente estructura
+$$
+\lambda 
+= 
+\begin{pmatrix}
+0.99 & 0.00 \\
+0.00 & 0.99 \\
+0.90 & 0.00 \\
+0.00 & 0.90 \\
+0.50 & 0.50 \\
+\end{pmatrix}
+$$
+y 
+$$
+\Sigma 
+= 
+\text{diag}
+\begin{pmatrix}
+0.01\\
+0.05 \\
+0.10 \\
+0.15 \\
+0.20 \\
+\end{pmatrix},
+$$
+i.e. 
+$$
+p=5, \text{ y } k=2.
+$$
+
+Datos simulados 2/
+---
+
+```{r data.sim, include=FALSE}
+set.seed(123)
+n <- 500
+p <- 5
+k <- 2
+mu.star <- matrix(0,nrow=p,ncol=1)
+beta.star <- matrix(c(0.99,0.00,0.90,0.00,0.50,
+0.00,
+0.99,
+0.00,
+0.90,
+0.50),nrow=p,ncol=k)
+Sigma.star <- diag(c(0.01, 0.05, 0.10, 0.15, 0.20))
+Omega <- beta.star%*%t(beta.star)+Sigma.star
+data.sim <- mvrnorm(n , mu=mu.star, Sigma=Omega, tol = 1e-6, empirical = FALSE, EISPACK = FALSE)
+data.sim <- as.data.frame(data.sim)
+colnames(data.sim) <- c("Y1","Y2","Y3","Y4","Y5")
+```
+
+```{r data.sim_plot, echo=FALSE}
+pairs.panels(data.sim, ellipses=F, scale=T, smooth=F, col=0)
+```
+
+Datos simulados 3/
+---
+
+```
+M.sim <- 10000
+M.burn <- 500
+posterior.data.sim <- MCMCfactanal(~Y1+Y2+Y3+Y4+Y5, 
+                          factors=k,
+                          lambda.constraints=list(Y2=c(1,0)),
+                          verbose=0, store.scores=FALSE, 
+                          a0=1, b0=0.15,
+                          data=data.sim, 
+                          burnin=M.burn, mcmc=M.sim, thin=20)
+```
+
+Datos simulados 3/
+---
+
+```{r data.sim.factor, include=FALSE}
+M.sim <- 10000
+M.burn <- 500
+posterior.data.sim <- MCMCfactanal(~Y1+Y2+Y3+Y4+Y5, 
+                          factors=k,
+                          lambda.constraints=list(Y2=c(1,0)),
+                          verbose=0, store.scores=FALSE, 
+                          a0=1, b0=0.15,
+                          data=data.sim, 
+                          burnin=M.burn, mcmc=M.sim, thin=20)
+```
+
+```{r data.sim.factor.plot, echo=FALSE}
+plot(posterior.data.sim)
+```
+
+Datos simulados 4/
+---
+
+```{r data.sim.factor.sumary, echo=FALSE}
+summary(posterior.data.sim)
+```
+
+Ilustracion `swiss` 1/
+---
+
+```{r swiss, echo=FALSE}
+data(swiss)
+pairs.panels(swiss, ellipses=F, scale=T, smooth=F, col=0)
+```
+
+Ilustracion `swiss` 2/
+---
+
+```{r swiss.factanal, include=FALSE}
+posterior.swiss <- MCMCfactanal(~Agriculture+Examination+Education+Infant.Mortality, 
+                          factors=2,
+                          lambda.constraints=list(Examination=list(1,"+"),
+                                                  Examination=list(2,"-"), 
+                                                  Education=c(2,0),
+                                                  Infant.Mortality=c(1,0)),
+                          verbose=0, store.scores=FALSE, 
+                          a0=1, b0=0.15,
+                          data=swiss, 
+                          burnin=M.burn, mcmc=M.sim, thin=20)
+```
+
+```{r swiss.factanal.plot, echo=FALSE}
+plot(posterior.swiss)
+```
+
+Ilustracion `swiss` 3/
+---
+
+```{r swiss.factanal.summary, echo=FALSE}
+summary(posterior.swiss)
+```
+
+
+# Complementos
+
+Siguiente sesion
+---
+
+* Estudio del analisis de factores latentes dinamicos/factores latentes en volatilidad.
+
+* Inferencia sobre el numero de factores.
+
+* Comparacion inferencial entre PCA y analisis de factores.
+
+* Prediccion con factores latentes.
+
+Lectura complementaria
+---
+
+* Stock & Watson (2002) *Forecasting using principal components from a large number of predictors.* `est46114_s08_suplemento1.pdf`
+
+* West (2003) *Bayesian factor regression models in the "large p, small n" paradigm.* `est46114_s08_suplemento2.pdf`
+
+* Pitt & Shephard (1999) *Time varying covariances: A factor stochastic volatility approach.* `est46114_s08_suplemento3.pdf`
+

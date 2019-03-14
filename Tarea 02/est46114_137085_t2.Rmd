@@ -1,0 +1,120 @@
+---
+title: "Tarea 2. An√°lisis de Factores"
+author: "Ren√© Rosado G 137085"
+date: "15 de febrero de 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r libraries, echo=FALSE, warning=FALSE, message=FALSE}
+if(!require("psych")){install.packages("psych")}
+library("psych")
+if(!require("MCMCpack")){install.packages("MCMCpack")}
+library("MCMCpack")
+if(!require("tidyverse")){install.packages("tidyverse")}
+library(tidyverse)
+```
+
+### An·lisis con 1 factor
+```{r file}
+tipo = readxl::read_xls('d:/Users/rene.rosado/Desktop/est46114_s06_data.xls')
+
+#Generamos 10 mil sumulaciones para tener el posterior
+M.sim <- 10000
+M.burn <- 500
+posterior <- MCMCfactanal(~., 
+                          factors=1,
+                          verbose=0, store.scores=FALSE, 
+                          lambda.constraints=list(EU12=list(1,0),
+                                                  Nicaragua =list(1,0)),
+                          a0=1, b0=0.15,
+                          data=tipo[,-1], 
+                          burnin=M.burn, mcmc=M.sim, thin=20)
+```
+
+### Cadenas
+
+```{r chains, echo=FALSE}
+par(mar=c(1,1,1,1))
+plot(posterior)
+```
+
+### Resumen
+
+```{r summary, echo=FALSE}
+summary(posterior)
+```
+
+### An·lisis con 2 factores
+```{r def2}
+M.sim <- 10000
+M.burn <- 500
+posterior <- MCMCfactanal(~., 
+                          factors=2,
+                          verbose=0, store.scores=FALSE, 
+                          lambda.constraints=list(EU12=list(1,0),
+                                                  Nicaragua =list(1,0),
+                                                  EU12=list(2,0),
+                                                  Nicaragua =list(2,0)),
+                          a0=1, b0=0.15,
+                          data=tipo[,-1], 
+                          burnin=M.burn, mcmc=M.sim, thin=20)
+```
+
+### Cadenas
+
+```{r chains2, echo=FALSE}
+par(mar=c(1,1,1,1))
+plot(posterior)
+```
+
+### Resumen
+
+```{r summary2, echo=FALSE}
+summary(posterior)
+```
+
+### An·lisis con dos factores de rendimientos
+
+```{r def3}
+tipo.r  = tipo[,-1] %>%
+  mutate_all(function(x) as.numeric(log(x/lag(x,1)))) 
+
+nans = which(lapply(tipo.r,function(x) sum(is.nan(x)))!=0)
+
+tipo.r = tipo.r[,-c(nans)]
+tipo.r = tipo.r[-c(1),]
+
+M.sim <- 10000
+M.burn <- 500
+posterior <- MCMCfactanal(~., 
+                          factors=2,
+                          verbose=0, store.scores=FALSE, 
+                          lambda.constraints=list(EU12=list(1,0),
+                                                  EU12=list(2,0)),
+                          a0=1, b0=0.15,
+                          data=tipo.r, 
+                          burnin=M.burn, mcmc=M.sim, thin=20)
+```
+
+### Cadenas
+
+```{r chains3, echo=FALSE}
+par(mar=c(1,1,1,1))
+plot(posterior)
+```
+
+### Resumen
+
+```{r summary3, echo=FALSE}
+summary(posterior)
+```

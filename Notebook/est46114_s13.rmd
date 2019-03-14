@@ -1,0 +1,386 @@
+---
+title: "EST-46114 Sesion 13 - Laboratorio - Analisis de Factores"
+author:
+-  Juan Carlos Martinez-Ovando
+-  Departamento Academico de Actuaria
+date: "Primavera 2019"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 2
+    number_sections: yes
+    self_contained: yes
+    theme: united
+    highlight: textmate
+fig_align: "center"
+fig_width: 18
+---
+
+# Datos
+
+Consideremos de nuevo los datos de tipos de cambio que hemos venido empleando en el curso.
+
+```{r}
+data <- read.csv("est46114_s06_data.csv")
+data <- as.data.frame(data)
+data <- as.matrix(data)
+```
+
+```{r}
+T <- nrow(data); p <- ncol(data)-2
+```
+
+```{r}
+datats <- ts(data[,c(3,4,p+2)],start=c(1970, 1), end=c(2010, 12), frequency=12)
+plot(datats)
+````
+
+# Modelo de factores
+
+El modelo de factores considera que `tiempo-a-tiempo` (i.e. para cada $t$ mes), el bloque de los $80$ tipos de cambio, o de los $3$ tipos de cambio (caso reducido para 'Canada','Mexico','Zambia'), denotados por $\boldsymbol{X}_t$, pueden modelarse como
+$$
+\boldsymbol{X}_t \sim \text{N}_p(\boldsymbol{x}|\boldsymbol{\theta},\boldsymbol{\Omega}),
+$$
+donde 
+
+* $\boldsymbol{\theta}$ es la media general en $t$, y 
+
+* $\boldsymbol{\Omega}$ es la matriz de varianzas y covarianzas de los $p$ tipos de cambio.
+
+## Supuestos
+
+Asi, el modelo implicitamente supone:
+
+1. Homogeneidad, i.e. $ \text{N}_p(\boldsymbol{x}|\boldsymbol{\theta},\boldsymbol{\Omega})$ en su 'forma estructural' y 'parametros' sea el mismo para todo $t$.
+
+2. Invarainza al orden, i.e. 
+$$
+\mathbb{P}(\boldsymbol{x}_1,\ldots,\boldsymbol{x}_t)=\mathbb{P}(\boldsymbol{x}_{\sigma(1)},\ldots,\boldsymbol{x}_{\sigma(t)}).
+$$
+Induciendo que el 'modelo lea' las observaciones independientemente o condicionalmente independiente en $t$.
+
+## Consideraciones
+
+Hemos visto que los supuestos (1) y (2) no son sustentables en este conjunto de datos.
+
+### Independencia
+
+Si los datos tuviesen proveyeran informacion acerca de la independencia en $t$, tendriamos que 'muestralmente', las correlaciones de los datos en $t$ respecto a tiempos previos (rezagos), seria 'nula'.
+
+La funcion de autocorrelacion nos brinda una herramienta para inspeccionar este supuesto.
+
+```{r}
+acf(datats[,"Canada"])
+```
+
+```{r}
+acf(datats[,"Mexico"])
+```
+
+```{r}
+acf(datats[,"Zambia"])
+```
+
+### Tendencia 
+
+Si el modelo homogeneo en tendencia (medias, o $\boldsymbol{\theta}_t$s) fuese admisible para el conjunto de datos, tendriamos que para todo orden de observaciones el comportamiento de las medias por 'subsegmentos' de datos seria muy semejante. En la grafica vemos que en este caso, esto no se cumple.
+
+```{r}
+datats <- ts(data[,3:(p+2)],start=c(1970, 1), end=c(2010, 12), frequency=12)
+Y <- T/12
+years <- seq(1970,2010,1)
+meansts <- NA * datats[c(1:41),]
+t <- 1
+for(t in 1:Y){
+  meansts[t, ] <- colMeans(data[which(data[,"Year"]==years[t]),3:(p+2)])
+}
+```
+
+
+```{r}
+plot(meansts[,"Canada"])
+```
+
+```{r}
+plot(meansts[,"Mexico"])
+```
+
+
+```{r}
+plot(meansts[,"Zambia"])
+```
+
+```{r}
+rep.row<-function(x,n){
+   matrix(rep(x,each=n),nrow=n)
+}
+rep.col<-function(x,n){
+   matrix(rep(x,each=n), ncol=n, byrow=TRUE)
+}
+```
+
+Corrigiendo por medias temporales, i.e. relajando el supesto que 
+$$
+\mathbb{E}(\boldsymbol{X}_t)=\boldsymbol{\theta},
+$$
+para todo $t$, por el siguiente,
+$$
+\mathbb{E}(\boldsymbol{X}_t)=\boldsymbol{\theta}_a,
+$$
+donde $a$ corresponde al anio calendario correspondiente a cada $t$, observamos un efecto de **correccion en tendencia**.
+
+```{r}
+datatsc <- datats
+t <- 1
+for(t in 1:Y){
+  datatsc[which(data[,"Year"]==years[t]),] <- datats[which(data[,"Year"]==years[t]),] - rep.row(meansts[t, ],12)
+}
+```
+
+```{r}
+plot(datatsc[,c("Canada","Mexico","Zambia")])
+```
+
+### Independencia (revisada)
+
+El **efecto de correccion en tendencia** implica necesariamente un efecto en terminos de la estructura de dependencia intrinseca (autocorrelacion). 
+
+```{r}
+acf(datatsc[,"Canada"])
+```
+
+```{r}
+acf(datatsc[,"Mexico"])
+```
+
+```{r}
+acf(datatsc[,"Zambia"])
+```
+
+## Invarianza al orden
+
+```{r}
+if(!require("gtools")){install.packages("gtools")}
+library("gtools")
+
+t.index <- c(1:T)
+
+set.seed(1)
+
+t.sample1 <- sample(t.index)
+
+t.sample2 <- sample(t.index)
+
+t.sample3 <- sample(t.index)
+```
+
+#### Datos originales
+
+```{r}
+plot(ts(datatsc[t.index,c("Canada","Mexico","Zambia")],frequency=12))
+```    
+#### Primera permutacion
+
+```{r}
+plot(ts(datatsc[t.sample1,c("Canada","Mexico","Zambia")],frequency=12))
+```    
+#### Segunda permutacion
+
+```{r}
+plot(ts(datatsc[t.sample2,c("Canada","Mexico","Zambia")],frequency=12))
+```    
+
+#### Tercera permutacion
+
+```{r}
+plot(ts(datatsc[t.sample3,c("Canada","Mexico","Zambia")],frequency=12))
+```    
+
+## Implementacion
+
+```{r}
+if(!require('MCMCpack')){install.packages("MCMCpack")}
+library("MCMCpack")
+
+datatsc.3 <- as.data.frame(datatsc[t.index,c("Canada","Mexico","Zambia")])
+
+fa.posterior <- MCMCfactanal(~Canada+Mexico+Zambia, 
+                             factors=1,
+                             lambda.constraints=list(Mexico1=c(1,0), 
+                                                     Zambia1=c(1,0)),
+                             verbose=0, store.scores=FALSE, 
+                             a0=1, b0=0.15,
+                             data=datatsc.3, 
+                             burnin=50, mcmc=150, thin=1)
+
+fa.posterior
+
+summary(fa.posterior)
+```
+
+#### Comentarios sobre la implementacion
+
+* Estamos considerando que los niveles medios $(\boldsymbol{\theta}_a)_{a\geq 1970}$ son "fijos"/"conocidos"para el modelo, aunque estos los hayamos calculado con los datos.
+
+* Los coeficientes 
+(`LambdaCanada_1`,`LambdaMexico_1`,`LambdaZambia_1`) corresponden al vector de cargas (unico, en este caso) contenido en la matriz $\Lambda$. 
+
+* Los coeficientes 
+(`PisCanada`,`PsiMexico`,`PsiZambia`) corresponden a las varianzas contenidas en la diagonal de la matriz $\Sigma$. 
+
+
+# Especificacion dinamica en factores
+
+En este caso, es de interes recuperar informacion respecto a la tendencia observada en los datos $(\boldsymbol{X}_t)_{t\geq 1}$ en terminos de los factores latentes, $(\boldsymbol{f}_t)_{t\geq 1}$ y de un componente en niveles $(\boldsymbol{\theta}_t)_{t\geq 1}$.
+
+Asi, para los datos $(p\times 1)$-dimensionales, el modelo es de la forma
+\begin{eqnarray}
+ \boldsymbol{X}_t|\boldsymbol{\theta}_t,\boldsymbol{f}_t & \sim & N_p(\boldsymbol{x}|\boldsymbol{\theta}_t+\Lambda \boldsymbol{f}_t,\Sigma)\nonumber \\
+\end{eqnarray}
+para $t\geq 1$, donde $\boldsymbol{\theta}_t$ es un vector $(p\times 1)$-dimensional, $\boldsymbol{f}_t$ es un vector $(k\times 1)$-dimensional (con $k<<p$), tales que
+\begin{eqnarray}
+  \boldsymbol{\theta}_t|\boldsymbol{\theta}_{t-1} & \sim & N_p(\boldsymbol{\theta}|\boldsymbol{f}_{t-1},\boldsymbol{W}) \nonumber, \\
+  \boldsymbol{f}_t|\boldsymbol{f}_{t-1} & \sim & N_k(\boldsymbol{f}|\Lambda \boldsymbol{f}{t-1},\boldsymbol{G}) \nonumber,
+\end{eqnarray}
+donde 
+
+* $\Lambda$ es la matriz $(p\times k)$-dimensional de cargas de factores, 
+
+* $\boldsymbol{W}$ es una matriz de varianzas y covarianzas (tipicamente conocida o preespecificada) de dimension $(p\times p)$ y 
+
+* $\boldsymbol{G}$ es una matriz diagonal de varianzas de dimension $(k\times k)$ (tambien, usualmente, fija o predefinida).
+
+## Parametros
+
+Los parametros del modelo quedan entonces especificados como
+$$
+\left(\Lambda,\boldsymbol{\Sigma}\right),
+$$
+siendo las variables latentes
+$$
+\left((\boldsymbol{f}_{t})_{t\geq 1}\right).
+$$
+Las condiciones de identificabilidad del modelo son iguales a las tradicionales, respecto a $\Lambda$.
+
+## Observaciones
+
+* El parametro $\boldsymbol{\theta}_t$ brinda una lectura acerca de la tendencia de los datos, en $t$, de manera separada para las $p$ dimensiones.
+
+* El parametro $\boldsymbol{f}_t|\boldsymbol{x}_t$ brinda informacion acerca del componente coyuntural de correlacion subyacente a $\boldsymbol{x}_t$ en $t$.
+
+* El componente de tendencia coyuntural agregado es, en este caso,
+\begin{eqnarray}
+\mathbb{E}(\boldsymbol{x}|\boldsymbol{f}_t) & = & \boldsymbol{\theta}_t + \Lambda \boldsymbol{f}_t, \nonumber
+\end{eqnarray}
+mientras que el compoente de tendencia coyuntural marginalizado es,
+\begin{eqnarray}
+\mathbb{E}(\boldsymbol{x}|\boldsymbol{f}_{t-1}) & = &  
+\int \boldsymbol{x}_t N_p(\boldsymbol{x}_t|\boldsymbol{\theta}_t+\Lambda\boldsymbol{t}_t)N_k(\boldsymbol{f}_t|\boldsymbol{f}_{t-1},\boldsymbol{G})\text{d}\boldsymbol{f}_t \nonumber \\ 
+& = & \boldsymbol{\theta}_t + \Lambda \boldsymbol{f}_{t-1}. \nonumber
+\end{eqnarray}
+
+Esta ultima es una media que hereda un componente del periodo previo. A diferencia del modelo estatico original, el efecto de $\boldsymbol{f}_t$ no se desvanece necesariamente.
+
+## Asociaciones
+
+El modelo anterior puede verse como un caso particular del modelo _state-space_ o _dynamic linear model_, donde el componente de estados es dual, i.e.,
+$$
+(\boldsymbol{\theta}_t,\boldsymbol{f}_t)_{t\geq 1}.
+$$
+Vean la referencia de West & Harrison en las lecturas complementarias.
+
+Es de notar que el componente de reduccion de dimensionalidad incorporado induce a que la estimacion de parametros no pueda realizarse de manera analitica cerrada empleando el `filtro de Kalman`. En este caso, algorimos del tipo MCMC y relacionados son empleados.
+
+## Implementacion
+
+```{r}
+if(!require("bayesdfa")){install.packages("bayesdfa")}
+library("bayesdfa")
+
+dfa.posterior <- fit_dfa(y = t(datatsc.3), iter = 150, chains = 1)
+ls(dfa.posterior)
+summary(dfa.posterior)
+```
+
+# Especificacion dinamica en volatilidad
+
+Seguimos considerando que los datos $(\boldsymbol{X}_t)_{t\geq 1}$ son $(p\times 1)$-dimensionales y que existen $(\boldsymbol{f}_t)_{t\geq 1}$ *vectores latentes* $(k\times 1)$-dimensionales, con $k<<p$, tales que
+\begin{eqnarray}
+ \boldsymbol{X}_t|\boldsymbol{f}_t & \sim & N_p(\boldsymbol{x}|\Lambda \boldsymbol{f}_t,\Sigma_t)\nonumber \\
+\end{eqnarray}
+para $t\geq 1$, donde
+$\Lambda$ es una matriz de cargas de dimension $p\times k$, y $$\Sigma_t=\text{diag}\{\exp(h_{1t}),\ldots,\exp(h_{pt})\},$$ es la matriz de volatilidad estocastica,
+con
+\begin{eqnarray}
+ \boldsymbol{f}_t|\boldsymbol{G}_{t} & \sim & N_k(\boldsymbol{f}|\boldsymbol{0},\boldsymbol{G}_t),\nonumber
+\end{eqnarray}
+considerando que $$\boldsymbol{G}_t=\text{diag}\{\exp(g_{1t}),\ldots,\exp(g_{kt})\}.$$
+
+La estructura de dependencia entre las $\Sigma_t$s y las $\boldsymbol{G}_t$s se define *separada* y *localmente* como,
+\begin{eqnarray}
+ h_{tj}|h_{(t-1)j} & \sim & N_1(h|\mu_{hj}+\phi_{hj}(h_{(t-1)j}-\mu_{hj}), s_{hj}),\nonumber
+\end{eqnarray}
+para $j=1,\ldots,p$, y 
+\begin{eqnarray}
+ g_{ti}|g_{(t-1)i} & \sim & N_1(g|\mu_{gi}+\phi_{gi}(h_{(t-1)i}-\mu_{gi}), s_{gi}),\nonumber
+\end{eqnarray}
+para $i=1,\ldots,k$, siendo las colecciones $(s_{hj})_{j=1}^p$ y $(s_{gi})_{i=1}^k$ escalares positivos conocidos.
+
+
+## Parametros
+
+Asi, los parametros del modelo por estimar tornan en
+$$
+\left(\Lambda,(\mu_{hj},\phi_{hj})_{j=1}^{p},(\mu_{gi},\phi_{gi})_{i=1}^{k}\right),
+$$
+y las variables latentes son
+$$
+\left((\boldsymbol{f}_t)_{t\geq 1},(\boldsymbol{h}_t)_{t\geq 1},(\boldsymbol{g}_t)_{t\geq 1}\right)
+\approx
+\left((\boldsymbol{f}_t)_{t\geq 1},(\boldsymbol{\Sigma}_t)_{t\geq 1},(\boldsymbol{G}_t)_{t\geq 1}\right).
+$$
+
+## Observacion
+
+Aunque $\Lambda$ es fijo en $t$, la estructura de codependencia de la $p$ variables originales es reproducida por el modelo actual a traves de $\boldsymbol{G}_t$, porque
+$$
+\Omega_t=\Lambda\boldsymbol{G}_t\Lambda' + \boldsymbol{\Sigma}_t,
+$$
+para $t\geq 1.$
+
+## Implementacion
+
+```{r}
+if(!require("factorstochvol")){install.packages("factorstochvol")}
+library("factorstochvol")
+
+datatsc.3 <- as.matrix(datatsc.3)
+
+dsfa.posterior <- fsvsample(datatsc.3, 
+                            factors = 1, 
+                            draws = 150, burnin = 50, runningstore = 6)
+
+voltimeplot(dsfa.posterior)
+corimageplot(dsfa.posterior, nrow(datatsc.3), plotCI = 'circle')
+oldpar <- par(ask = FALSE)
+plot(dsfa.posterior)
+par(oldpar)
+```
+# Comentarios generales
+
+* Los modelos flexibles que hemos visto en esta sesion presentan resultados `ad-hoc` que son confiables.
+
+* Aunque confiables, estas soluciones no son generales y por lo menos dominantes a todas las circunstancias.
+
+* Hemos visto que cada implementacion tiene estructuras de `codificacion`, `uso` y `notacion` particulares. Estos aspectos siempre podran sortearse teniendo conocimiento de aspecto metodologico que involucra el modelo.
+
+* En estas ilustraciones hemos corrido pocas simulaciones de las cadenas de Markov para hacer inferencia... En aplicaciones reales deberan correr mas, no demasiadas, de hecho.
+
+# Lecturas complementarias
+
+* Jackson et al (2015) *Specification and Estimation of Bayesian Dynamic Factor Models*, `est46114_s13_suplemento1.pdf`
+
+* Kastner et al (2017) *Efficient bayesian Inference for Multivariate Factor Stochastic Volatility Models*, `est46114_s13_suplemento2.pdf`
+
+* West & Harrison (1997) *Bayesian Forecasting and Dinamic Models,* Springer, "Cap. Multivariate Modelling and Forecasting".
