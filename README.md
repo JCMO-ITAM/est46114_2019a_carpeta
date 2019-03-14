@@ -1,11 +1,12 @@
-# EST-46114 Metodos Multivariados y Datos Categoricos
+# EST-46114 Métodos Multivariados y Datos Categóricos
 
 *Primavera 2019*
 
 ## Objetivos
-•	Comprender los fundamentos de los métodos estadísticos aplicados a datos multidimensionales (e.g. vectores, matrices, tensores y formas).
-•	Implementar procedimientos predictivos asociados con estos modelos.
-•	Producir e interpretar resultados analíticos prácticos.
+
+* Comprender los fundamentos de los métodos estadísticos aplicados a datos multidimensionales (e.g. vectores, matrices, tensores y formas).
+* Implementar procedimientos predictivos asociados con estos modelos.
+*	Producir e interpretar resultados analíticos prácticos.
 
 ## Temas
 
@@ -56,7 +57,9 @@
 -	Segunda sesión para el desarrollo de implementaciones e interpretación de resultados.
 
 *	Sesiones acompañadas con ejercicios a casa y laboratorios reproducibles.
+
 *	Lecturas complementarias de libros o artículos de investigación acerca de extensiones y temas selectos contemporáneos. 
+
 *	Laboratorios de R y RStudio, junto con un track de entrenamiento complementario de R.
 
 ## Evaluación de Curso
@@ -72,13 +75,23 @@
 ## Referencias
 
 Agresti, A. (2007). An Introduction to Categorical Data Analysis. Springer, New York. Parte 3.
+
 Agresti, A. (2002). Categorical Data Analysis. John Wiley & Sons, Berlin. Parte 3.
+
 Bhisop, Y., et al. (2007). Discrete Multivariate Analysis: Theory and Practice. Springer, London. Parte 3.
+
 Coppi, R. (1994). “An introduction to multiway data and their analysis.” Computational Statistics and Data Analysis, (18):3-13. Parte 3.
+
 Everytt, B. y Hothorn, T. (2011). An Introduction to Applied Multivariate Analysis with R. Springer, London. Parte 2.
+
 Friendly, M. (2016). Visualizing Categorical Data with SAS and R. SAS Inc. Parte 3.
+
 Hojsgaard, S. et al. (2012). Graphical Models with R. Springer, London. Parte 3.
+
 Izenman, A.J. (2008). Modern Multivariate Statistical Techniques. Springer, London. Parte 2.
+
 Johnson, V.E. y Albert, J. (1999). Ordinal Data Modeling. Springer, London. Parte 3.
+
 Kuhn, M. y Johnson, K. (2013). Applied Predictive Modeling. Springer, New York. Parte 2.
+
 Press, J.S. (2005). Applied Multivariate Analysis. Krie
