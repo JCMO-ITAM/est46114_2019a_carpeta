@@ -1,0 +1,393 @@
+---
+title: "Sesion 14a - Análisis de Correlación Canónica (CCA) + Escalamiento multidimensional"
+author:
+-  Juan Carlos Martínez-Ovando
+-  Maestría en Ciencia de Datos
+date: "Primavera 2019"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 2
+    number_sections: yes
+    self_contained: yes
+    theme: cerulean
+    highlight: textmate
+fig_align: "center"
+fig_width: 18
+---
+
+```{r include=FALSE}
+if(!require('ggplot2')){install.packages("ggplot2")}
+suppressMessages(library("ggplot2"))
+
+if(!require('GGally')){install.packages("GGally")}
+suppressMessages(library("GGally"))
+
+if(!require('CCA')){install.packages("CCA")}
+suppressMessages(library("CCA"))
+
+if(!require('CCAGFA')){install.packages("CCAGFA")}
+suppressMessages(library("CCAGFA"))
+```
+
+# Parte 2 - Ilustración CCA  {.tabset .tabset-fade .tabset-pills}
+
+## Datos
+
+Los datos que analizamos corresponden a 600 registros de estudiantes relacionados con sus habilidades academicas, capacidades emocionales y actitud.
+ 
+ * **actitud** - `control`, `concepto`, `motivacion`
+ 
+ * **habiliades** - `lectura`, `escritura`, `matematicas`, `ciencias`
+
+ * **intrinsecas** - `genero`
+ 
+
+## Objetivo
+  
+> **Resumir como estas variables en bloque se relacionan entre si.**
+  
+## Información
+
+Los datos están disponibles en el archivo `est46114_ccadata.csv`.
+
+```{r}
+datos <- read.csv("est46114_s14_ccadata.csv", header = TRUE)
+colnames(datos)
+head(datos)
+dim(datos)
+```
+
+La estructura de dependencia muestral de estos datos es de la siguiente forma:
+
+```{r}
+plot(datos)
+```
+
+```{r}
+plot(datos[,c("control","concepto","lectura","escritura","matematicas","ciencia")])
+```
+
+Considerando el conjunto de `datos`, se requiere especificar dos conjuntos de variables. En este ejemplo, dividiremos los `datos` en dos bloques:
+
+### Bloque A) `aptitud`+/-`genero`
+
+Correspondiente a las mediciones:
+
+* `control`
+
+* `concepto`
+
+* `moitivacion`
+
+```{r}
+aptitud <- datos[,c("control","concepto","motivacion" )]
+summary(aptitud)
+```
+
+```{r}
+ggpairs(aptitud)
+```
+
+### Bloque B) `habilidades`
+
+Considerando las mediciones:
+
+* `lectura`
+
+* `escritura`
+
+* `matematicas`
+
+* `ciencia`
+
+```{r}
+habilidades <- datos[,c("lectura","escritura","matematicas","ciencia")]
+summary(habilidades)
+```
+```{r}
+ggpairs(habilidades)
+```
+
+## Correlaciones
+
+A continuación calcularmos las matrices de correlaciones $\boldsymbol{\rho}$ para los datos:
+
+```{r}
+mat.corr <- matcor(aptitud, habilidades)
+```
+
+**Aptitud**
+
+```{r echo=FALSE}
+mat.corr$Xcor
+```
+
+**Habilidades**
+
+```{r echo=FALSE}
+mat.corr$Ycor
+```
+
+**Aptitud** +  **Habilidades**
+
+```{r echo=FALSE}
+mat.corr$XYcor
+```
+
+## Analisis `SCCA`
+
+Consolidamos los datos y aplicamos `SCCA` sobre las 700 observaciones.
+
+```{r}
+datos.cc <- cc(aptitud, habilidades)
+```
+
+_Nota: Revisen la documentacion de la funcion `cc` y la libreria `CCA` en general._
+
+
+```
+summary(datos.cc)
+```
+
+**Correlacion canonica**
+
+Hasta `3` coeficientes de correlacion canonica... _Recuerdan?_
+
+```
+datos.cc$cor
+```
+
+**Coeficientes de cargas del** `SCCA`
+
+* **Aptitud**
+
+```{r echo=FALSE}
+t(datos.cc$xcoef)
+```
+
+* **Habilidades**
+
+```{r echo=FALSE}
+t(datos.cc$ycoef)
+```
+
+_Como interpretamos estas cifras???_
+
+**Vectores canonicos del** `SCCA`
+
+Para las `700` observaciones, recuperamos sus *variables canonicas*:
+
+```{r}
+datos.cc.coef <- comput(aptitud, habilidades, datos.cc)
+head(datos.cc.coef$xscores)
+head(datos.cc.coef$yscores)
+```
+
+Los datos en este apartado corresponden a las *correlaciones* entre las *variables originales* y las *variables canonicas*.
+
+**Loadings `CCA`**
+
+* **Aptitud**
+```{r echo=FALSE}
+t(datos.cc.coef$corr.X.xscores)
+```
+
+* **Habilidades**
+
+```{r echo=FALSE}
+t(datos.cc.coef$corr.Y.xscores)
+```
+
+**Significacia del `SCCA`**
+
+> Las dimensiones canonicas (o variables canonicas), son *variables latentes* cuya interpretación es análoga a la de los *factores  latentes* obtenidos en el `AF`.
+
+> **Pregunta:** ¿Cuáles de esas *variables canónicas* son estadísticamente significativas?
+
+```{r}
+ev <- (1 - datos.cc$cor^2)
+n <- dim(aptitud)[1]
+p <- length(habilidades)
+q <- length(aptitud)
+k <- min(p, q)
+m <- n - 3/2 - (p + q)/2
+w <- rev(cumprod(rev(ev)))
+d1 <- d2 <- f <- vector("numeric", k)
+for (i in 1:k) {
+    s <- sqrt((p^2 * q^2 - 4)/(p^2 + q^2 - 5))
+    si <- 1/s
+    d1[i] <- p * q
+    d2[i] <- m * s - p * q/2 + 1
+    r <- (1 - w[i]^si)/w[i]^si
+    f[i] <- r * d2[i]/d1[i]
+    p <- p - 1
+    q <- q - 1
+}
+```
+
+```{r}
+pv <- pf(f, d1, d2, lower.tail = FALSE)
+dmat <- cbind(WilksL = w, F = f, df1 = d1, df2 = d2, p = pv)
+dmat
+```
+
+**Significacia del `CCA`**
+
+> Ajustes por variaciones en escala en los datos originales.
+
+* **Aptitud** 
+
+La matriz diagonal de coeficientes canónicos estandarizados de `aptitud` dada por `sd`.
+
+```{r}
+s1 <- diag(sqrt(diag(cov(aptitud))))
+s1 %*% datos.cc$xcoef
+```
+
+* **Habilidades** 
+
+La matriz diagonal estandarizada de los coeficientes `habiliades` academicas con base en `sd`.
+
+```{r}
+s2 <- diag(sqrt(diag(cov(habilidades))))
+s2 %*% datos.cc$ycoef
+```
+
+# Temas avanzados
+
+* Implicaciones de emplear variables `estandarizadas` o `no estandarizadas`  
+
+* Implicaciones de realizar `CCA` con variables discretas o categóricas
+
+* Incorporacion de la **incertidumbre epistémica** asociada con el aprendizaje de $\boldsymbol{\Sigma}_x$, $\boldsymbol{\Sigma}_y$ y $\boldsymbol{\Sigma}_{xy}$ **especialmente**, como en el caso de `PCA`
+
+* Anticipar/predecir la **correlacion canonica** entre un conjunto de variables futuras $\boldsymbol{X}^{f}$ y $\boldsymbol{Y}^{f}$, con base en el aprendizaje realizado.
+
+* *Escalabilidad* de la solución
+
+* `CCA` para más de dos conjuntos de variables simúltaneamente.
+
+* `CCA` no lineal (`CCA Funcional`)
+
+# Parte 3 - Escalamiento multidimensional  {.tabset .tabset-fade .tabset-pills}
+
+Consideramos que $\boldsymbol{X}$ es una matriz de dados de dimension $(n\times p)$, donde:
+
+* $n$ - numero de observaciones (o unidades de observacion)
+
+* $p$ - numero de atributos (i.e. variables) para las unidades de observacion
+
+* $n>>p$ - por especificacion
+
+## Idea
+
+El escalamiento multidimensional (`MS`) es un procedimiento geometrico que permite graficar la estructura de dependencia de la siguiente forma:
+
+1. $n$ objetos en $p$ (o una dimension menor) dimensiones de variables (esto mide la estructura de dependencia de las `unidades de observacion` entre **variables**)
+
+2. $p$ variables en $n$ (o dimensiones menores) dimensiones de individuos (esto mide la estructura de dependencia de las `variables` entre las **unidades de observacion**)
+
+## Distancia
+
+La representacion grafica se construye al rededor de una **nocion geometrica** de `distancia` o `similitud`. Por ejemplo:
+
+* **Distancia euclidiana:-** Para $\boldsymbol{x}_i$ y $\boldsymbol{x}_j$ se define
+$$
+d(\boldsymbol{x}_i,\boldsymbol{x}_j)=(<\boldsymbol{x}_i-\boldsymbol{x}_j,\boldsymbol{1}>)^{1/2}.
+$$
+
+Con base en esta metrica, se define la matriz de distancias, $\boldsymbol{D}_r$, como,
+$$
+\boldsymbol{D}_r = \left(d(\boldsymbol{x}_i,\boldsymbol{x}_j)\right)_{i=1}^{n}.
+$$
+
+**Nota:-** Esta es una matriz simetrica, por lo que sera de interes solo estudiar los elementos en la `parte triangular inferior` (o `superior`).
+
+
+# Parte 4 - Ilustracion MS  {.tabset .tabset-fade .tabset-pills}
+
+```
+if(!require('cluster')){install.packages("cluster")}
+library("cluster")
+
+if(!require('MASS')){install.packages("MASS")}
+library("MASS")
+
+if(!require('smacof')){devtools::install_github("cran/smacof")}
+library("smacof")
+```
+
+```{r include=FALSE}
+if(!require('cluster')){install.packages("cluster")}
+library("cluster")
+
+if(!require('MASS')){install.packages("MASS")}
+library("MASS")
+
+if(!require('smacof')){devtools::install_github("cran/smacof")}
+library("smacof")
+```
+
+```{r}
+datos.ms <- cbind(aptitud,habilidades)
+dim(datos.ms)
+```
+
+
+## Distancia euclidiada
+
+Calculamos la matriz de distancias poor `variables`:
+
+```{r}
+datos.dist <- as.matrix(dist(datos.ms, method = "euclidean",diag = FALSE, upper = FALSE))
+dim(datos.dist)
+head(datos.dist)
+datos.dist <- as.dist(datos.dist)
+head(datos.dist)
+```
+
+## Agrupacion
+
+```{r}
+datos.dist.h <- hclust(datos.dist,method="complete")
+datos.dist.h.out <- cutree(datos.dist.h, k=5)
+datos.dist.h.clust <- datos.dist.h.out
+head(datos.dist.h.clust)
+```
+
+## Metrica euclidiana
+
+Vemos la representacion grafica de esta agrupacion:
+
+```{r}
+datos.dist.out <- cmdscale(datos.dist)
+head(datos.dist.out)
+plot(datos.dist.out)
+colvec <- c("green","gold","blue","red","black")
+rowvec <- rownames(as.data.frame(datos))
+L <- 150
+for(i in 1:L){
+  text(datos.dist.out[i,1],datos.dist.out[i,2],rowvec[i],col=colvec[datos.dist.h.clust[i]],cex=0.85)
+}
+```
+
+---
+
+# Lecturas  {.tabset .tabset-fade .tabset-pills}
+
+## Complementarias
+
+* Izenman, *Modern Multivariate Statistical Techniques*, Seccion 7.3
+
+* `CCAGFA` vignettes
+
+* `CCA` vignettes
+
+## Extendidadas
+
+* Adrover y Donato *A robust predictive approach for canonical correlation analysis* `est46114_s14_complemento1.pdf`
+
+* Bonner y Liu *Canonical Correlation, an Approximation, and the Prediction of Protein Abundance* `est46114_s14_complemento2.pdf`
+

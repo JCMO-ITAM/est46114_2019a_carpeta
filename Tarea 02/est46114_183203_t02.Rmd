@@ -1,0 +1,275 @@
+---
+title: "Análisis de Factores"
+author: "Ana Luisa Masetto Herrea"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lubridate)
+```
+
+## Introducción 
+
+En este documento se presenta el análisis de factores para la base de datos relacionada con los tipos de cambio desde 1970 hasta 2010 de 80 países. 
+
+## Cargar datos
+
+```{r}
+tipo_de_cambio <- readxl::read_xls("est46114_s06_data.xls")
+#Convertir datos a serie de tiempo con ts(), solamente se seleccionan 3 países para ilustración 
+tipo_de_cambio_canada <- ts(tipo_de_cambio$Canada,start = c(1970,01), frequency = 12)
+tipo_de_cambio_zambia <- ts(tipo_de_cambio$Zambia,start = c(1970,01), frequency = 12)
+tipo_de_cambio_mexico <- ts(tipo_de_cambio$Mexico,start = c(1970,01), frequency = 12)
+```
+
+```{r,fig.width=10,fig.height=7}
+par(mfrow = c(3,1))
+plot(tipo_de_cambio_canada, main = "Tipo de cambio real mensual de Canadá", col = "deeppink1", ylab="CAN/USD", lwd=3)
+plot(tipo_de_cambio_mexico, main = "Tipo de cambio real mensual de México", col = "hotpink", ylab="MEX/USD", lwd=3)
+plot(tipo_de_cambio_zambia, main = "Tipo de cambio real mensual de Zambia", col = "mediumvioletred", ylab="Kwacha/USD", lwd=3)
+```
+
+Lo que se puede observar en las gráficas anteriores es el comportamiento del tipo de cambio de los 3 países a lo largo de los 41 años. Es claro que este comportamiento difiere mucho de país en país y de año en año en cada escenario, por lo tanto, no se puede extraer demasiada información de estas gráficas; es por eso que a continuación se ve a hacer un análisis de las medias anuales de dichos paises para notar con mayor facilidad el cambio del tipo de cambio a lo largo de los años. 
+
+## Medias por año 
+
+```{r}
+#Función para obtener medias y desviaaciones estpandar
+tipo_de_cambio_pais_promedio_anual <- function(x,pais){
+  fecha <- as.Date(x$Date)
+  tipo_de_cambio_mensual <-unname(unlist(x[pais]))
+  
+  datos_mensuales <- data_frame(fecha, tipo_de_cambio_mensual)
+  
+  datos_anuales <- datos_mensuales %>% 
+    group_by(year=floor_date(fecha, "year")) %>%
+    summarize(media_anual = mean(tipo_de_cambio_mensual),
+              desv_anual = sd(tipo_de_cambio_mensual))
+  datos_anuales
+  
+}
+canada_tc_prom_anual <- tipo_de_cambio_pais_promedio_anual(x = tipo_de_cambio,pais = "Canada")
+mexico_tc_prom_anual <- tipo_de_cambio_pais_promedio_anual(x = tipo_de_cambio,pais = "Mexico")
+zampbia_tc_prom_anual <- tipo_de_cambio_pais_promedio_anual(x = tipo_de_cambio,pais = "Zambia")
+```
+
+
+```{r,fig.width=10,fig.height=7}
+par(mfrow = c(3,1))
+plot(canada_tc_prom_anual$media_anual, main="Tipo de cambio promedio anual Canadá", col = "deeppink1", type = "p", lwd=3, ylab="media anual") 
+plot(mexico_tc_prom_anual$media_anual, main="Tipo de cambio promedio anual México", col = "hotpink", type = "p", lwd=3, ylab="media anual")
+plot(zampbia_tc_prom_anual$media_anual, main="Tipo de cambio promedio anual Zambia", col = "mediumvioletred", type = "p", lwd=3, ylab="media anual")
+```
+
+Lo que se puede observar en las tres gráficas anteriores es que las medias no son iguales, ni siquiera varian en un rango estrecho a lo largo de los años, es por eso que es necesario transformar los datos acorde a su media y desviación estándar anual.  
+
+## Centrar y estandarizar datos
+
+```{r}
+#Función para estandarizar los datos
+tipo_de_cambio_pais_estandarizado <- function(x, pais){
+    datos_mensuales <- x %>% select(Date,pais) %>% mutate(ano = year(Date)) %>% rename(tipo_de_cambio = pais)
+    datos_anuales <- tipo_de_cambio_pais_promedio_anual(x,pais) %>% mutate(ano = year(year)) 
+    
+    datos_estandarizados <- datos_mensuales %>% left_join(datos_anuales, by=c("ano")) %>% mutate(tc_estandarizado = (tipo_de_cambio-media_anual) / desv_anual)
+    
+    datos_estandarizados %>% select(Date,ano, tc_estandarizado)
+}
+```
+
+```{r}
+#Aplicar función anterior para los tres países utilizados para ilustración 
+canada_tc_estandarizado <- tipo_de_cambio_pais_estandarizado(tipo_de_cambio, pais = "Canada")
+zambia_tc_estandarizado <- tipo_de_cambio_pais_estandarizado(tipo_de_cambio, pais = "Zambia")
+mexico_tc_estandarizado <- tipo_de_cambio_pais_estandarizado(tipo_de_cambio, pais = "Mexico")
+```
+
+
+```{r,fig.width=10,fig.height=7}
+par(mfrow = c(3,1))
+plot(canada_tc_estandarizado$tc_estandarizado, main="Tipo de cambio promedio centrado en Canadá", type ="l", col = "deeppink1", lwd=2, ylab="datos estandarizados")
+plot(zambia_tc_estandarizado$tc_estandarizado, main="Tipo de cambio promedio centrado en Zambia",  type = "l",col= "hotpink", lwd=2, ylab="datos estandarizados")
+plot(mexico_tc_estandarizado$tc_estandarizado, main="Tipo de cambio promedio centrado en México", type = "l", col = "mediumvioletred", lwd=2, ylab="datos estandarizados")
+```
+
+Lo que se puede observar en estas gráficas son los datos ya estandarizados y se puede observar a primera instancia que las escalas ahora son las mismas, entre -2 y 2 en los tres casos, también se oberva que los datos se mueven alrededor de la misma media y la variación no es tan pronunciada. 
+
+## Estandarizar todos datos
+
+```{r}
+#Lista con los 80 países en cuestión 
+paises_de_interes <- names(tipo_de_cambio)[-1]
+head(paises_de_interes,10)
+```
+
+
+```{r}
+#Aplicar la función de estandarizar los datos a todos los países
+lista_paises_estandarizados <- lapply(paises_de_interes, tipo_de_cambio_pais_estandarizado, x = tipo_de_cambio) 
+
+
+#Ponerle nombre a las listas creadas con el nombre anterior
+names(lista_paises_estandarizados) <- names(tipo_de_cambio)[-1]
+
+#Juntar las listas 
+df_tipo_de_cambio_estandarizados <- bind_rows(lista_paises_estandarizados, .id = "column_label") %>% 
+  spread(column_label,tc_estandarizado)
+
+head(df_tipo_de_cambio_estandarizados)
+```
+
+
+```{r}
+#Remover columna con año y fecha
+matriz_de_diseno <- df_tipo_de_cambio_estandarizados  %>% select(-Date, -ano)
+matriz_de_diseno
+```
+
+
+## Correr modelo 
+
+En esta sección se va a correr el modelo de análisis de factores con la librería de MCMCpack. 
+El primer chunk de esta sección se encarga de hacer las simulaciones y el siguiente da un resumen de los valores obtenidos de las simulaciones, lambdas y desviaciones estándar. 
+
+
+```{r, message=FALSE}
+library(MCMCpack)
+
+n <-  nrow(matriz_de_diseno) # n-observaciones
+p <- ncol(matriz_de_diseno) # p-dimensiones
+k <- 1 # k-factores
+
+data.sim <- matriz_de_diseno
+
+M.sim <- 1000 # simulaciones 
+M.burn <- 500  # simulaciones para el périodo de calentamiento
+
+# MCMCfactanal: Markov Chain Monte Carlo for Normal Theory Factor Analysis Model
+posterior.data.sim <- MCMCfactanal(~.,            # Formula que contiene las variables
+                                   
+                          factors=k,
+                                                  
+                          verbose=0, store.scores=FALSE,
+                          a0=1,                    # Controla la forma de la Prior Gamma Inversa (alfa)
+                          b0=0.15,                 # Controla la forma de la Prior Gamma Inversa (beta)
+                          data=data.sim,           # El nombre de un dataframe
+                          burnin=M.burn,
+                          mcmc=M.sim,
+                          thin=20)                            
+```
+
+```{r}
+summary<-summary(posterior.data.sim)[[1]]
+head(summary)
+tail(summary)
+```
+
+Ahora, hay que guardar las simulaciones en un objeto, simulaciones respectivas para cada lambda y para cada psi: 
+
+```{r}
+df_simulaciones <- as_data_frame(posterior.data.sim)
+head(df_simulaciones)
+```
+
+## Análisis de resultados de la simulación 
+
+Los resultados que salieron de la simulación deben de ser acomodados de tal forma que facilite su manejo, es por eso que en la siguiente parte, se hace un nuevo data frame con las lambdas y psi correspondientes a cada país. 
+
+```{r}
+#Filtrar lambdas y sigmas
+lambdas <- dplyr::select(df_simulaciones, starts_with("Lamb")) %>% 
+  summarise_all("mean")  %>% 
+  gather("pais","lambda", 1:80)
+
+sigma <- dplyr::select(df_simulaciones, starts_with("Psi")) %>% 
+  summarise_all("mean")  %>% 
+  gather("pais","psi", 1:80)
+
+#Combinar ambos objetos en u data frame 
+resultados_promedio <- cbind(lambdas,sigma)
+
+#Asignar nombres a columas del dataframe anterior 
+names(resultados_promedio) <- c("pais_lambda", "lambda", "pais_sigma", "sigma")
+
+#Remover columnas innecesarias 
+resultados_promedio <- resultados_promedio %>% dplyr::select(-pais_lambda,-pais_sigma)
+
+#Crear una nueva columna con el nombre de los paises 
+pais <- names(data.sim)
+
+#Combinar la columna con los nombres de los países y el dataframe con lambdas y sigmas 
+resultados_promedio <- cbind(pais, resultados_promedio)
+
+head(resultados_promedio)
+```
+
+Como parte del análisis de factores es necesario calcular la varianza muestras de la siguiente manera: 
+
+```{r}
+resultados_final<-resultados_promedio %>% mutate("varianza_marginal" = (lambda * lambda) + sigma)
+head(resultados_final)
+```
+
+Es importante mencionar que las sigmas corresponden a las varianzas idiosincráticas de los países y que todos los valores de sigma deben de ser positivos dado que un supuesto de este modelo es que esta matriz este positivamente definida.  
+
+```{r}
+summary(resultados_final)
+```
+
+
+### Análisis de resultados al modelo de factores: Sigmas
+
+```{r}
+resultados_final %>% arrange(sigma) %>% head(3)
+```
+
+En la tabla anterior de muestran los países con menor varianza idiosincrática, estos son: Dinamarca, Francia y Luxemburgo. Al analizar la varianza ideosincrática es importante saber que un valoro pequeño implica poca volatilidad, es decir, son de los países más estables. 
+
+```{r}
+resultados_final %>% arrange(sigma) %>% tail(3)
+```
+
+En contraste con la tabla que muestra los países con los valores más pequeños obtenidos en sigma, esta tabla muestra que Hong Kong, República Dominicana y Sierra Leone son los países cuya varianza ideosincrática es mayor, por lo tanto, son países más volatiles. 
+
+### Análisis de resultados al modelo de factores: Lambdas
+
+```{r}
+resultados_final %>% arrange(lambda) %>% head(3)
+```
+
+Las lambdas en análisis defactores corresponden a los pesos asociados de cada país en la construcción del factor que busca explicar el fenómeno en cuestión. En este caso, son: Dinamarca, Francia y Luxemburgo quienes tienen los pesos más negativos en el factor 1, lo que implica que están relacionados de manera negativa en el factor 1. Sin embargo, no son los únicos, en la siguiente lista se pueden ver todos los países cuya lambda es negativa: 
+
+```{r}
+resultados_final %>% arrange(lambda) %>% head(71)
+```
+
+En contraste con el caso anterior, también hay valores de lambda positivos lo cual implica que sus pesos están relacionados de manera positiva con el factoro creado. 
+
+```{r}
+resultados_final %>% arrange(lambda) %>% tail(3)
+```
+
+Los tres países cuyo peso es mayor de forma positiva en el factor son: Mexico, Honduras y Hong Kong, sin embargo, no son los únicos, también hay otros 6 países cuyo peso es positivo y por lo tanto, su relación es positiva con el factor creado. 
+
+```{r}
+resultados_final %>% arrange(lambda) %>% tail(9)
+```
+
+
+### Análisis de resultados al modelo de factores:  Varianza Marginal
+
+La varianza marginal puede verse como una combinación de la información que proporciona las cargas del factor y los elementos de la diagonal de la matriz sigma. 
+
+
+```{r}
+resultados_final %>% arrange(varianza_marginal) %>% head(3)
+```
+
+Lo que podemos observar de la tabla anterior es que: Brasil, Nigeria y Republica Dominicana son los países con menor valor en su varianza marginal. 
+
+```{r}
+resultados_final %>% arrange(varianza_marginal) %>% tail(3)
+```
+A diferencia de la tabla anterior, Luxemburgo, Francia y Dinamarca son los países que presentan mayor varianza marginal. 

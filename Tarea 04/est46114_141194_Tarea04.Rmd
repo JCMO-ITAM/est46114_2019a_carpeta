@@ -1,0 +1,321 @@
+---
+title: "Tarea 04 - Modelos de Factores y DIC"
+author: "Arantza Ivonne Pineda Sandoval"
+output: html_document
+---
+
+En este trabajo se desarrollan los scripts para 4 modelos de factores y los DIC correspondientes. La base de datos utilizada es de los tipos de cambio (USD). Finalmente se realiza una comparación de los DIC.
+
+Modelos:
+\begin{itemize}
+ \item 1) Modelo de factores con k=1
+ \item 2) Modelo de factores con k=2
+ \item 3) Modelo de factores estático (medias cambiantes)
+ \item 4) Modelo Dinámico en Medias
+ \end{itemize}
+
+
+## Cargar Librerías y Leer Datos
+```{r}
+library("MCMCpack")
+library("lubridate")
+library("bayesdfa")
+library("Rcpp")
+library("factorstochvol")
+library("gtools")
+library("mvtnorm")
+library("readxl")
+library("tidyverse")
+library("gridExtra")
+
+data <- read.csv("est46114_s06_data.csv")
+
+data_3paises <- data%>%select("Canada", "Mexico", "Zambia")
+head(data_3paises)
+
+```
+
+Para tener una visualización de los datos originales considerando los 3 países bajo interés: Canadá, México y Zambia se grafican las series de tiempo:
+
+```{r, fig.width=10,fig.height=5}
+tipo_de_cambio_canada <- ts(data$Canada,start = c(1970,01), frequency = 12)
+tipo_de_cambio_zambia <- ts(data$Zambia,start = c(1970,01), frequency = 12)
+tipo_de_cambio_mexico <- ts(data$Mexico,start = c(1970,01), frequency = 12)
+par(mfrow = c(1,3))
+plot(tipo_de_cambio_canada, main = "Tipo de cambio real mensual de Canadá", col = "pink", ylab="CAN/USD")
+plot(tipo_de_cambio_mexico, main = "Tipo de cambio real mensual de México", col = "blue", ylab="MEX/USD")
+plot(tipo_de_cambio_zambia, main = "Tipo de cambio real mensual de Zambia", col = "purple", ylab="Kwacha/USD")
+
+```
+
+## 1) Modelo de factores k=1
+
+Se genera un primer modelo de factores k=1 usando la función MCMfactanal y sin restricciones:
+```{r}
+
+
+n_sim <- 1000
+n_burnin <- 100
+
+fa.posterior_1 <- MCMCfactanal(~Canada+Mexico+Zambia, 
+                             factors=1,
+                             verbose=0, store.scores=FALSE, 
+                             a0=1, b0=0.15,
+                             data=data_3paises, 
+                             burnin=n_burnin, mcmc=n_sim, thin=1)
+
+resumen_modelo_1 <-summary(fa.posterior_1)
+resumen_modelo_1 
+```
+
+Se extraen los datos necesarios de los resultados anteriores para con ellos poder calcular el DIC:
+```{r}
+
+# Función para extraer modas y usarlas en extraccion de lambdas y sigmas
+calculoModa <- function(v) {
+uniqv <- unique(v)
+uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+#Extraer número de parámetros
+num_parametros1<-nrow(resumen_modelo_1$statistics)
+print("*Numero de Parametros*")
+num_parametros1
+
+# Extraer vector de lambdas
+modelo_1_lambdas<-apply(fa.posterior_1[,grep("Lambda",colnames(fa.posterior_1))],2,calculoModa)
+print("*Lambdas*")
+modelo_1_lambdas
+
+# Extraer vector de sigmas
+modelo_1_sigmas<-diag(apply(fa.posterior_1[,grep("Psi",colnames(fa.posterior_1))],2,calculoModa))
+print("*Sigmas*")
+modelo_1_sigmas
+```
+
+Para calcular la medida DIC que ayuda a la comparación de modelos se genera la siguiente función:
+
+```{r}
+calcula_DIC<-function(data,mu=NULL,Lambda,Sigma,parametros){
+  
+  if(is.null(mu)){
+     mu=matrix(0,ncol=ncol(Sigma),nrow = 1)
+  }
+  
+  matriz_omega<-as.matrix(Lambda)%*% t(as.matrix(Lambda))+as.matrix(Sigma)
+  
+  # Verosimilitud con función dmvnorm
+  norm.dense<-apply(data,1,function(x) mvtnorm::dmvnorm(x,mean=mu,sigma=matriz_omega,log=TRUE))
+  log.like<-sum(norm.dense)
+  
+  DIC=-2*log.like+2*parametros     #Se utiliza la fórmula del DIC para calcular
+  return(DIC)
+
+}
+```
+
+Se calcula el DIC para el modelo de k=1:
+
+```{r}
+
+DIC_completo1<-calcula_DIC(data=data_3paises,mu=NULL,Lambda=modelo_1_lambdas,Sigma=modelo_1_sigmas,parametros=num_parametros1)
+DIC_completo1
+```
+
+
+## 2) Modelo de factores k=2
+
+Se genera el modelo para dos factores k=2:
+```{r}
+
+n_sim <- 1000
+n_burnin <- 100
+
+fa.posterior_2 <- MCMCfactanal(~Canada+Mexico+Zambia, 
+                             factors=2,
+                            #lambda.constraints=list(Canada=c(1,0), Mexico=c(0,1)),
+                             verbose=0, store.scores=FALSE, 
+                             a0=1, b0=0.15,
+                             data=data_3paises, 
+                             burnin=n_burnin, mcmc=n_sim, thin=1)
+
+resumen_modelo_2 <-summary(fa.posterior_2)
+resumen_modelo_2
+```
+
+Se extraen los datos necesarios de los resultados anteriores para con ellos poder calcular el DIC:
+```{r}
+
+#Extraer número de parámetros
+num_parametros2<-nrow(resumen_modelo_2$statistics)
+print("*Numero de Parametros*")
+num_parametros2
+
+#Extraer Lambdas
+modelo_2_lambdas<-cbind(apply(fa.posterior_2[,grep(regex("^(Lambda).+(\\_1$)"),
+                                                   colnames(fa.posterior_2))],2,calculoModa),
+                        c(apply(fa.posterior_2[,grep(regex("^(Lambda).+(\\_2$)"),
+                                                colnames(fa.posterior_2))],2,calculoModa)))
+print("*Lambdas*")
+modelo_2_lambdas
+
+# Extraer vector de sigmas
+modelo_2_sigmas<-diag(apply(fa.posterior_2[,grep("Psi",colnames(fa.posterior_2))],2,calculoModa))
+print("*Sigmas*")
+modelo_2_sigmas
+```
+
+Se calcula el DIC para el modelo de k=2:
+```{r}
+
+DIC_completo2<-calcula_DIC(data=data_3paises,mu=NULL,Lambda=modelo_2_lambdas,Sigma=modelo_2_sigmas,parametros=num_parametros2)
+DIC_completo2
+```
+
+
+## 3) Modelo de factores estático (medias cambiantes)
+
+Para poder generar este modelo, primero se estandarizan los datos con sus medias anuales y desviaciones estándar:
+```{r}
+
+data <- read_excel('est46114_s06_data.xls')
+
+#2 Funciones de estandarización
+tipo_de_cambio_pais_promedio_anual <- function(x = tipo_de_cambio,pais = "Canada"){
+  fecha <- as.Date(x$Date)
+  tipo_de_cambio_mensual <-unname(unlist(x[pais]))
+  
+  datos_mensuales <- data_frame(fecha, tipo_de_cambio_mensual)
+  
+  datos_anuales <- datos_mensuales %>% 
+    group_by(year=floor_date(fecha, "year")) %>%
+    summarize(media_anual = mean(tipo_de_cambio_mensual),
+              desv_anual = sd(tipo_de_cambio_mensual))
+  datos_anuales
+  
+}
+
+
+tipo_de_cambio_pais_estandarizado <- function(x, pais){
+    datos_mensuales <- x %>% select(Date,pais) %>% mutate(ano = year(Date)) %>% rename(tipo_de_cambio = pais)
+    datos_anuales <- tipo_de_cambio_pais_promedio_anual(x,pais) %>% mutate(ano = year(year)) 
+    
+    datos_estandarizados <- datos_mensuales %>% left_join(datos_anuales, by=c("ano")) %>% mutate(tc_estandarizado = (tipo_de_cambio-media_anual) / desv_anual)
+    
+    datos_estandarizados %>% select(Date,ano, tc_estandarizado)
+}
+
+#Estandarizar la base de datos completa
+
+paises_de_interes <- names(data)[-1]
+
+lista_paises_estandarizados <- lapply(paises_de_interes, tipo_de_cambio_pais_estandarizado, x = data) 
+
+names(lista_paises_estandarizados) <- names(data)[-1]
+
+df_estandar <- bind_rows(lista_paises_estandarizados, .id = "column_label") %>% 
+  spread(column_label,tc_estandarizado)
+
+df_estandar
+
+```
+
+Para visualizar la estandarización se grafican los 3 países de interés:
+```{r}
+#Dataframe
+data_3paises_estandar <- df_estandar%>%select("Canada", "Mexico", "Zambia")
+head(data_3paises_estandar)
+
+#Gráficas
+g1<-plot(data_3paises_estandar$Canada, main="Tipo de cambio promedio centrado en Canadá", type ="l", col= "pink")
+g2<-plot(data_3paises_estandar$Mexico, main="Tipo de cambio promedio centrado en Mexico",  type = "l",col= "blue")
+g3<-plot(data_3paises_estandar$Zambia, main="Tipo de cambio promedio centrado en Zambia", type = "l", col= "purple")
+
+```
+Con estos datos ajustados a sus medias se genera el modelo estático con 1 factor:
+```{r}
+n_sim <- 1000
+n_burnin <- 100
+
+fa_Est_MediasCam.posterior_3 <- MCMCfactanal(~Canada+Mexico+Zambia, 
+                             factors=1,
+                             verbose=0, store.scores=FALSE, 
+                             a0=1, b0=0.15,
+                             data=data_3paises_estandar, 
+                             burnin=n_burnin, mcmc=n_sim, thin=1)
+
+resumen_modelo_3 <-summary(fa_Est_MediasCam.posterior_3)
+resumen_modelo_3 
+```
+
+Se extraen los datos necesarios para el cálculo del DIC:
+
+```{r}
+#Extraer número de parámetros
+num_parametros3<-nrow(resumen_modelo_3$statistics)
+print("*Numero de Parametros*")
+num_parametros3
+
+# Extraer vector de lambdas
+modelo_3_lambdas<-apply(fa_Est_MediasCam.posterior_3 [,grep("Lambda",colnames(fa_Est_MediasCam.posterior_3 ))],2,calculoModa)
+print("*Lambdas*")
+modelo_3_lambdas
+
+# Extraer vector de sigmas
+modelo_3_sigmas<-diag(apply(fa_Est_MediasCam.posterior_3 [,grep("Psi",colnames(fa_Est_MediasCam.posterior_3 ))],2,calculoModa))
+print("*Sigmas*")
+modelo_3_sigmas
+```
+
+A continuación se calcula el DIC:
+
+```{r}
+DIC_completo3<-calcula_DIC(data=data_3paises_estandar,mu=NULL,Lambda=modelo_3_lambdas,Sigma=modelo_3_sigmas,parametros=num_parametros3)
+DIC_completo3
+```
+
+
+## 4) Modelo dinámico (en medias)
+
+```{r, results='hide'}
+dfa.posterior_4 <- fit_dfa(y = t(data_3paises_estandar), iter = 1000, chains = 1)
+
+ls(dfa.posterior_4)
+summary(dfa.posterior_4)
+```
+
+Para extraer los valores necesarios para el cálculo del DIC:
+```{r}
+#Verosimilitud
+verosim_mod4<-sum(dfa.posterior_4$model@par_dims$log_lik) 
+verosim_mod4
+```
+
+```{r}
+#Se obtienen los parámetros correspondientes a la suma de : Sigma, y las matrices W y G
+num_parametros4<-dim(dfa.posterior_4$samples_permuted$Z)[2]+  dim(dfa.posterior_4$samples_permuted$sigma)[2]+  dim(dfa.posterior_4$samples_permuted$psi)[2] 
+num_parametros4
+```
+Se calcula el DIC del modelo 4:
+```{r}
+#DIC
+DIC_completo4<-2*verosim_mod4+2*num_parametros4
+DIC_completo4
+```
+
+## Comparación de modelos
+
+Una vez que se han analizados los 4 modelos, se genera una tabla comparativa de los resultados:
+
+```{r}
+tablaCompara<-data_frame(Modelo=c("1) Modelo de factores con k=1",
+                                    "2) Modelo de factores con k=2",
+                                    "3) Modelo de factores estático (medias cambiantes)",
+                                    "4) Modelo Dinámico en Medias"),
+                        DIC=c(DIC_completo1,DIC_completo2,DIC_completo3,DIC_completo4),
+                        Número_de_Parámetros=c(num_parametros1,num_parametros2, num_parametros3, num_parametros4))
+
+tablaCompara
+
+```
+Acorde a la tabla, el mejor modelo es el modelo con el menor DIC, en este caso es el modelo 4) dinámico en medias.

@@ -1,0 +1,467 @@
+---
+title: "Sesion 14 - Análisis de Correlación Canónica (CCA)"
+author:
+-  Juan Carlos Martínez-Ovando
+-  Maestría en Ciencia de Datos
+date: "Primavera 2019"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 2
+    number_sections: yes
+    self_contained: yes
+    theme: cerulean
+    highlight: textmate
+fig_align: "center"
+fig_width: 18
+---
+
+# Parte 1 - Fundamentos  {.tabset .tabset-fade .tabset-pills}
+
+## Objetivo
+
+**El **analisis de correlacion canonica** (`CCA`) es una técnica estadística que estudia la asociación entre dos conjuntos/bloques de variables simultáneamente observadas en el mismo conjunto de individuos o unidades de observación**
+
+Usos de `CCA`:
+
+a. Reducción de dimensionalidad (explicando el comovimiento de los dos bloques a través del comovimiento de combinaciones lineales de dimensiones menores)
+
+b. Exploración de datos (mediante la creacion de `atributos latentes` o `variables canonicas` que explican el comovimiento de un *conjunto de variables originales*)
+
+## Notación
+
+Suponemos $\boldsymbol{X}$ y $\boldsymbol{Y}$ como conjuntos de variables de dimensiones $(p\times 1)$ y $(q\times 1)$, respectivamente, con 
+
+$$
+\boldsymbol{X} \sim \text{N}_p(x|\boldsymbol{\mu}_x,\boldsymbol{\Sigma}_x),
+$$
+y
+$$
+\boldsymbol{Y} \sim \text{N}_q(y|\boldsymbol{\mu}_y,\boldsymbol{\Sigma}_y).
+$$
+
+Si $$\boldsymbol{\Sigma}_{xy}$$ denota la covarianza entre $\boldsymbol{X}$ y $\boldsymbol{Y}$, entonces,
+$$
+\boldsymbol{Z}=(\boldsymbol{X},\boldsymbol{Y}) \sim \text{N}_{p+q}(z|\boldsymbol{\mu},\boldsymbol{\Sigma}),
+$$
+con 
+\begin{eqnarray}
+\boldsymbol{\mu} & = &(\boldsymbol{\mu}_x,\boldsymbol{\mu}_y), \nonumber \\
+\boldsymbol{\Sigma} & = & \left( 
+\begin{array}[c c] 
+\boldsymbol{\Sigma}_{x} & \boldsymbol{\Sigma}_{xy}\\ 
+\boldsymbol{\Sigma}_{yx} & \boldsymbol{\Sigma}_{y}
+\end{array}
+\right).
+\end{eqnarray}
+
+## Combinaciones lineales
+
+> **El `CCA` consiste en proyectar $\boldsymbol{X}$ y $\boldsymbol{Y}$ en un espacio de dimension equivalente, y sobre ese espacio definir una estructura de relación entre ambos bloques de datos.**
+
+> **Se define $r$ como la dimensió común de ambas proyecciones.**
+
+De esta manera, para $j=1,\ldots,r$, con 
+$$
+r=\min(p,q),
+$$
+se definen las variables unidimensionales
+$$
+U_j = <\boldsymbol{X},a_j>, \\
+U_j = <\boldsymbol{Y},b_j>,
+$$
+siendo $(a_j)_{j=1}^{r}$ y $(b_j)_{j=1}^{r}$ dos colecciones de vectores $(p\times 1)$ y $(q\times 1)$ dimensionales, respectivamente.
+
+> **Idea**
+
+Las nuevas variables,
+$$\boldsymbol{U}=(U_1,\ldots,U_r),
+$$
+y 
+$$
+\boldsymbol{V}=(V_1,\ldots,V_r),
+$$
+resumen la correlacion implícita entre $\boldsymbol{X}$ y $\boldsymbol{Y}$ a través de la especificación cuidadosa de los **vectores de proyeccion**, 
+$$
+(a_j,b_j)_{j=1}^{r}.
+$$
+
+## Definición
+
+> La especificación de los vectores de proyección 
+$$
+(a_j,b_j)_{j=1}^{r},
+$$
+se realiza de la siguiente forma:
+
+Para $j=1$ se eligen $a_1$ y $b_1$ tales que 
+
+* $\rho(U_1,V_1)=\frac{a_1'\Sigma_{xy}b_1}{(a_1\Sigma_x a_1)^{1/2}(b_1\Sigma_y b_1)^{1/2}}$ sea **máxima**
+
+* (sujeto a que) $var(U_1)=1$ y $var(V_1)=1.$
+
+Para $j\geq 2$ se eligen $a_j$ y $b_j$ tales que 
+
+* $\rho(U_j,V_j)=\frac{a_j'\Sigma_{xy}b_j}{(a_j\Sigma_x a_j)^{1/2}(b_j\Sigma_y b_j)^{1/2}}$ sea **máxima**
+
+* (sujeto a que) $var(U_j)=1$ y$var(V_j)=1$, y
+
+* $\rho\left((U_j,V_j),(U_l,V_l)\right)=0$ para todo $l<j$.
+
+**Nota: `CCA` es en esencia un problema de optimizacion cuadratica con restricciones anidadas. (Semejante a una interpretación del `PCA`).**
+
+## Solución matricial
+
+> **De manera semejante a `PCA`, el `CCA` puede calcularse matricialmente.**
+
+Resulta ser que las $j$-esimas **variables canonicas** estan dadas por
+$$
+U_j = e_{xj}'\boldsymbol{\Sigma}_x^{-1/2}\boldsymbol{X},
+$$
+y
+$$
+V_j=e_{xj}'\boldsymbol{\Sigma}_y^{-1/2}\boldsymbol{X},
+$$
+donde $e_{xj}$ y $e_{yj}$ son vectores $(p\times 1)$ y $(q\times 1)$ dimensionales, respectivamente, que corresponden a los $j$-ésimos **eigenvectore de las matrices**,
+$$
+\boldsymbol{\Sigma}_{x}^{-1/2}\boldsymbol{\Sigma}_{xy}\boldsymbol{\Sigma}_y^{-1}\boldsymbol{\Sigma}_{yx}\boldsymbol{\Sigma}_{x}^{-1/2},
+$$
+y
+$$
+\boldsymbol{\Sigma}_{y}^{-1/2}\boldsymbol{\Sigma}_{yx}\boldsymbol{\Sigma}_x^{-1}\boldsymbol{\Sigma}_{xy}\boldsymbol{\Sigma}_{y}^{-1/2},
+$$
+respectivamente.
+
+
+**Nota:** El $j$-esimo eigenvector $\rho_j$ de las matrices arriba corresponde con la **correlacion entre las variables canonicas**  correspondientes, $U_j$ y $V_j$. 
+
+## Variables canonicas
+
+> **A través de las proyecciones canónicas, es posible recuperar las variables proyectadas como**  *variables latentes canónicas*.
+
+Las nuevas **variables canonicas** se definen como
+$$
+\boldsymbol{U} = \boldsymbol{A}'\boldsymbol{X}
+$$
+y 
+$$
+\boldsymbol{V} = \boldsymbol{B}'\boldsymbol{Y},
+$$
+ambas de dimension $(r\times 1)$, donde 
+$$
+\boldsymbol{A}=(a_1',\ldots,a_r')
+$$
+y
+$$
+\boldsymbol{B}=(b_1',\ldots,b_r'),
+$$
+son ambas matrices de dimensiones $(r\times p)$ y $(r\times q)$, respectivamente. 
+
+* Los renglones en las matrices $\boldsymbol{A}$ y $\boldsymbol{B}$ miden la contriución de cada dimension a las *variables canonicas correspondientes*.
+
+> Estas matrices corresponden a los `eigenvectores` de las matrices de covarianzas tranformadas descritas anteriormente. 
+
+## Comentarios
+
+* De manera semejante a `PCA`, el modelo `CCA` se define como `muestral` (`SCCA`), `poblacional` (`PCCA`) o `inferencial` (`ICCA`).
+
+* El modelo, de manera semejante a `FA`, se define localmente *observacion-a-observación*.
+
+* Al construirse sobre **matrices de covarianzas** resulta ser sensible a la forma de modelar la media por observaciones. 
+
+* El modelo `CCA` presupone que las matrices de covarianzas son de `rango completo` (no es tan drástico este supuesto, es implícito en `PCA` tambi\e'n).
+
+* Si los datos están estandarizados en escala para que tengan varianza 1 *dimensión-a-dimensión*, entonces `CCA` estaría implementado sobre matrices de correlaciones.
+
+## Paquetes
+
+En `R` les recomiendo dos paquetes:
+
+* `CCA`, que en realidad implementa `SCCA`
+
+* `CCAGFA`, que en implementa `ICCA` con el enfoque bayesiano, junto con otras extensiones interesantes.
+
+```
+if(!require('CCA')){install.packages("CCA")}
+suppressMessages(library("CCA"))
+
+if(!require('CCAGFA')){install.packages("CCAGFA")}
+suppressMessages(library("CCAGFA"))
+```
+
+```{r include=FALSE}
+if(!require('ggplot2')){install.packages("ggplot2")}
+suppressMessages(library("ggplot2"))
+
+if(!require('GGally')){install.packages("GGally")}
+suppressMessages(library("GGally"))
+
+if(!require('CCA')){install.packages("CCA")}
+suppressMessages(library("CCA"))
+
+if(!require('CCAGFA')){install.packages("CCAGFA")}
+suppressMessages(library("CCAGFA"))
+```
+
+# Parte 2 - Ilustración  {.tabset .tabset-fade .tabset-pills}
+
+
+## Datos
+
+Los datos que analizamos corresponden a 600 registros de estudiantes relacionados con sus habilidades academicas, capacidades emocionales y actitud.
+ 
+ * **actitud** - `control`, `concepto`, `motivacion`
+ 
+ * **habiliades** - `lectura`, `escritura`, `matematicas`, `ciencias`
+
+ * **intrinsecas** - `genero`
+ 
+
+## Objetivo
+  
+> **Resumir como estas variables en bloque se relacionan entre si.**
+  
+## Información
+
+Los datos están disponibles en el archivo `est46114_ccadata.csv`.
+
+```{r}
+datos <- read.csv("est46114_s14_ccadata.csv", header = TRUE)
+colnames(datos)
+head(datos)
+dim(datos)
+```
+
+La estructura de dependencia muestral de estos datos es de la siguiente forma:
+
+```{r}
+plot(datos)
+```
+
+Considerando el conjunto de `datos`, se requiere especificar dos conjuntos de variables. En este ejemplo, dividiremos los `datos` en dos bloques:
+
+### Bloque A) `aptitud`+/-`genero`
+
+Correspondiente a las mediciones:
+
+* `control`
+
+* `concepto`
+
+* `moitivacion`
+
+```{r}
+aptitud <- datos[,c("control","concepto","motivacion" )]
+summary(aptitud)
+```
+
+```{r}
+ggpairs(aptitud)
+```
+
+### Bloque B) `habilidades`
+
+Considerando las mediciones:
+
+* `lectura`
+
+* `escritura`
+
+* `matematicas`
+
+* `ciencia`
+
+```{r}
+habilidades <- datos[,c("lectura","escritura","matematicas","ciencia")]
+summary(habilidades)
+```
+```{r}
+ggpairs(habilidades)
+```
+
+## Correlaciones
+
+A continuación calcularmos las matrices de correlaciones $\boldsymbol{\rho}$ para los datos:
+
+```{r}
+mat.corr <- matcor(aptitud, habilidades)
+```
+
+**Aptitud**
+
+```{r echo=FALSE}
+mat.corr$Xcor
+```
+
+**Habilidades**
+
+```{r echo=FALSE}
+mat.corr$Ycor
+```
+
+**Aptitud** +  **Habilidades**
+
+```{r echo=FALSE}
+mat.corr$XYcor
+```
+
+## Analisis `SCCA`
+
+Consolidamos los datos y aplicamos `SCCA` sobre las 700 observaciones.
+
+```{r}
+datos.cc <- cc(aptitud, habilidades)
+```
+
+_Nota: Revisen la documentacion de la funcion `cc` y la libreria `CCA` en general._
+
+
+```
+summary(datos.cc)
+```
+
+**Correlacion canonica**
+
+Hasta `3` coeficientes de correlacion canonica... _Recuerdan?_
+
+```
+datos.cc$cor
+```
+
+**Coeficientes de cargas del** `SCCA`
+
+* **Aptitud**
+
+```{r echo=FALSE}
+t(datos.cc$xcoef)
+```
+
+* **Habilidades**
+
+```{r echo=FALSE}
+t(datos.cc$ycoef)
+```
+
+_Como interpretamos estas cifras???_
+
+**Vectores canonicos del** `SCCA`
+
+Para las `700` observaciones, recuperamos sus *variables canonicas*:
+
+```{r}
+datos.cc.coef <- comput(aptitud, habilidades, datos.cc)
+head(datos.cc.coef$xscores)
+head(datos.cc.coef$yscores)
+```
+
+Los datos en este apartado corresponden a las *correlaciones* entre las *variables originales* y las *variables canonicas*.
+
+**Loadings `CCA`**
+
+* **Aptitud**
+```{r echo=FALSE}
+t(datos.cc.coef$corr.X.xscores)
+```
+
+* **Habilidades**
+
+```{r echo=FALSE}
+t(datos.cc.coef$corr.Y.xscores)
+```
+
+**Significacia del `SCCA`**
+
+> Las dimensiones canonicas (o variables canonicas), son *variables latentes* cuya interpretación es análoga a la de los *factores  latentes* obtenidos en el `AF`.
+
+> **Pregunta:** ¿Cuáles de esas *variables canónicas* son estadísticamente significativas?
+
+```{r}
+ev <- (1 - datos.cc$cor^2)
+n <- dim(aptitud)[1]
+p <- length(habilidades)
+q <- length(aptitud)
+k <- min(p, q)
+m <- n - 3/2 - (p + q)/2
+w <- rev(cumprod(rev(ev)))
+d1 <- d2 <- f <- vector("numeric", k)
+for (i in 1:k) {
+    s <- sqrt((p^2 * q^2 - 4)/(p^2 + q^2 - 5))
+    si <- 1/s
+    d1[i] <- p * q
+    d2[i] <- m * s - p * q/2 + 1
+    r <- (1 - w[i]^si)/w[i]^si
+    f[i] <- r * d2[i]/d1[i]
+    p <- p - 1
+    q <- q - 1
+}
+```
+
+```{r}
+pv <- pf(f, d1, d2, lower.tail = FALSE)
+dmat <- cbind(WilksL = w, F = f, df1 = d1, df2 = d2, p = pv)
+dmat
+```
+
+**Significacia del `CCA`**
+
+> Ajustes por variaciones en escala en los datos originales.
+
+* **Aptitud** 
+
+La matriz diagonal de coeficientes canónicos estandarizados de `aptitud` dada por `sd`.
+
+```{r}
+s1 <- diag(sqrt(diag(cov(aptitud))))
+s1 %*% datos.cc$xcoef
+```
+
+* **Habilidades** 
+
+La matriz diagonal estandarizada de los coeficientes `habiliades` academicas con base en `sd`.
+
+```{r}
+s2 <- diag(sqrt(diag(cov(habilidades))))
+s2 %*% datos.cc$ycoef
+```
+
+# Temas avanzados
+
+* Implicaciones de emplear variables `estandarizadas` o `no estandarizadas`  
+
+* Implicaciones de realizar `CCA` con variables discretas o categóricas
+
+* Incorporacion de la **incertidumbre epistémica** asociada con el aprendizaje de $\boldsymbol{\Sigma}_x$, $\boldsymbol{\Sigma}_y$ y $\boldsymbol{\Sigma}_{xy}$ **especialmente**, como en el caso de `PCA`
+
+* Anticipar/predecir la **correlacion canonica** entre un conjunto de variables futuras $\boldsymbol{X}^{f}$ y $\boldsymbol{Y}^{f}$, con base en el aprendizaje realizado.
+
+* *Escalabilidad* de la solución
+
+* `CCA` para más de dos conjuntos de variables simúltaneamente.
+
+* `CCA` no lineal (`CCA Funcional`)
+
+# Siguiente sesión  {.tabset .tabset-fade .tabset-pills}
+
+En la siguiente sesión:
+
+* Discutiremos el uso de `PCA`, `FA` y `CCA` para realizar predicción analítica
+
+* Revisaremos pseudo código con ilustraciones
+
+# Lecturas  {.tabset .tabset-fade .tabset-pills}
+
+## Complementarias
+
+* Izenman, *Modern Multivariate Statistical Techniques*, Seccion 7.3
+
+* `CCAGFA` vignettes
+
+* `CCA` vignettes
+
+## Extendidadas
+
+* Adrover y Donato *A robust predictive approach for canonical correlation analysis* `est46114_s14_complemento1.pdf`
+
+* Bonner y Liu *Canonical Correlation, an Approximation, and the Prediction of Protein Abundance* `est46114_s14_complemento2.pdf`
+

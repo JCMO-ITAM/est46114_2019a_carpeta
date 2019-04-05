@@ -1,0 +1,182 @@
+---
+Author: Francisco Alvarez Rojo
+Title: Tarea 1 Est Multiv
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r}
+library(tidyverse)
+library(gdata)
+library(MASS)
+library(pracma)
+library(plotly)
+library(ggplot2)
+```
+
+Consideren los datos de tipo de cambio /USD de la sesión 06 (est46114 s06 data.csv).
+
+```{r}
+data <- read.xls("data/est46114_s06_data.xls")
+data <- data.frame(data[,-1], row.names = data[,1])
+```
+
+
+1. Implementen el procedimiento inferencial PCA considerando distribuciones iniciales no
+informativas para (μ, Λ).
+
+```{r posterior, include=FALSE}
+data <- data
+
+a0 <- 1
+s0 <- 1
+m0 <- matrix(0,ncol=1,nrow=80) # pongo 80 porque data tiene 80 variables
+B0 <- diag(1,ncol=80,nrow=80) 
+
+gaussian.posterior <- function(data,m0,s0,a0,B0){
+  xbar <- as.matrix(colMeans(data))  # saco los promedios por columna
+  S <- cov(data) # saco la covarianza de los datos
+  n <- nrow(data) # numero de filas de los datos
+  p <- ncol(data) # numero de columnas de los datos
+  # Posterior hiperparameters
+  sn <- s0 + n 
+  an <- a0 + n/2
+  mn <- (s0*m0 + n*xbar)/sn 
+  Bn <- B0 + (n/2)*(S + (s0/sn)*(xbar-m0)%*%t(xbar-m0))
+  # Output
+  output <- list(mn,sn,an,Bn)
+  return(output)
+}
+
+output <- gaussian.posterior(data,m0,s0,a0,B0)
+```
+
+Visualizo la covarianza de los datos
+```{r}
+covar <- cov(data)
+```
+
+Entiendo los datos:
+
+```{r}
+head(m0) # Vector de dimensión n.col con ceros
+```
+```{r}
+dim(B0) # Matriz diagonal de dim n.col x n.col
+```
+
+
+
+
+```{r}
+M <- 10000
+mu.sim <- matrix(NA,nrow=M, ncol=ncol(data))
+Lambda.sim <- array(NA,dim=c(M,ncol(data),ncol(data)))
+e.sim <- matrix(NA,nrow=M, ncol=ncol(data))
+V.sim <- array(NA,dim=c(M,ncol(data),ncol(data)))
+C.sim <- array(NA,dim=c(M,nrow(data),ncol(data)))
+m <- 1; X <- as.matrix(data)
+for(m in 1:M){
+  # Simulacion (mu,Lambda)
+  Lambda.sim[m,,] <- rWishart(1, output[[3]], output[[4]])
+  mu.sim[m,] <- mvrnorm(1, mu=output[[1]], Sigma=solve(output[[2]]*Lambda.sim[m,,]), tol = 1e-6)
+  # Simulacion (e,V) + C
+  eigen_aux <- eigen(solve(Lambda.sim[m,,]))
+  e.sim[m,] <- eigen_aux$values
+  V.sim[m,,] <- eigen_aux$vectors
+  C.sim[m,,] <- X %*% V.sim[m,,]
+}
+```
+
+Inferencia sobre vector e1
+```{r}
+hist(e.sim[,1])
+summary(e.sim[,2])
+```
+
+Inferencia sobre el componente principal uno $c_{i,1}$ de la observacion $i=1$
+```{r}
+hist(C.sim[,1,1])
+summary(C.sim[,1,1])
+```
+
+2. Reporten que economia tiene el mayor peso esperado en la descomposicion PCA.
+
+```{r echo=FALSE}
+data.pca <- prcomp(data, scale. = TRUE)
+summary(data.pca)
+ls(data.pca)
+```
+
+```{r echo=FALSE}
+pca3 <- round(data.pca$rotation[, 1:3], 2)
+pca3
+```
+
+```{r}
+biplot(data.pca, cex = 0.4)
+```
+
+Checo eigenvalores para entender el país con mayor impacto
+
+```{r}
+eigen_valores <- eigen_aux[[1]]
+min(eigen_valores)
+eigen_valores
+```
+
+
+3. Reporten que economia tiene la mayor consistencia en estimacion de los cj's correspon-
+dientes.
+
+```{r}
+# Calculo para primer eigenvector y promedios de precios. Después lo hago por el eigenvalor relacionado al eigenvector
+pca_1 <- data.pca$rotation[, 1]
+data_means <- colMeans(data)
+mult_1 <- pca_1 * t(data_means)
+vect_1 <- mult_1*eigen_valores[1]
+
+# Esto lo repito para los eigenvectores y eigenvalores 2 y 3.
+pca_2 <- data.pca$rotation[, 2]
+mult_2 <- pca_2 * t(data_means)
+vect_2 <- mult_1*eigen_valores[2]
+
+#pca_3 <- data.pca$rotation[, 3]
+#mult_3 <- pca_3 * t(data_means)
+#vect_3 <- mult_3*eigen_valores[3]
+
+# Finalmente sumo estas multiplicaciones y grafico el total respecto a sus componentes principales.
+sum_fin <- vect_1+vect_2
+tabla <- data.frame(t(sum_fin))
+colnames(tabla)<-c('prom')
+tabla$eivec1 <- pca_1
+tabla$eivec2 <- pca_2
+
+plot_ly(x=tabla$eivec1, y=tabla$eivec2, z=tabla$prom, type = "scatter3d",mode="markers", color = tabla$prom)
+
+# En esta gráfica se puede ver un patron interesante. El país mas alejado del cero, marcado en amarillo es Ecuador, seguido por indonesia y Paraguay.
+
+
+
+
+```
+
+```{r}
+# Grafico el promedio respecto a la primera componente 
+
+ggplot(tabla, aes(x=prom, y=eivec1)) + geom_point(position = "jitter") + geom_text(label=rownames(tabla))
+```
+
+```{r}
+# Si me quedo con países entre el 0 y 0.001 tengo esto
+
+s1 <- subset(tabla, prom<0.001)
+s1 <- subset(s1, prom>0)
+
+ggplot(s1, aes(x=prom, y=eivec1)) + geom_point(position = "jitter") + geom_text(label=rownames(s1))
+
+```
+
+A partir de esto encuentro un patrón tal vez interesante. No soy economista pero probablemente estas economías cercanas a cero en tipo de cambio representen una economía estable. :/ 
+

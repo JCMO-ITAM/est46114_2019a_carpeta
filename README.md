@@ -44,7 +44,7 @@
 
 14.	Datos perdidos
 
-15.	Selección y reducción de dimensionalidad
+15.	Seleccion y reducción de dimensionalidad
 
 16.	Tensores y modelos de grafos probabilísticos 
 
@@ -68,7 +68,7 @@
 
 * Examen parcial 2: 25%
 
-* Proyecto práctico: 25%
+* Proyecto practico: 25%
 
 * Examen/proyecto final: 25%
 
