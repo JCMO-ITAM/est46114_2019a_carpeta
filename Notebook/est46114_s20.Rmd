@@ -1,0 +1,535 @@
+---
+title: "Sesion 20 - Datos Categoricos y Modelos de Grafos Probabilisticos Parte 3/"
+author:
+-  Juan Carlos Martínez-Ovando
+-  Maestría en Ciencia de Datos
+date: "Primavera 2019"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 2
+    number_sections: yes
+    self_contained: yes
+    theme: cerulean
+    highlight: textmate
+fig_align: "center"
+fig_width: 18
+---
+
+\newcommand{\bigCI}{\mathrel{\text{$\perp\mkern-10mu\perp$}}}
+
+# Objetivos
+
+En esta sesion:
+
+* Estudiaremos definiciones y propiedades teoricas de los **modelos de grafos probabilisticos.**
+
+* Implementaremos las soluciones con las librerias `gRbase`, `gRain` y `gRim`:
+
+```
+if(!requireNamespace("BiocManager", quietly = TRUE)){install.packages("BiocManager")}
+BiocManager::install("graph", version = "3.8")
+BiocManager::install("RBGL", version = "3.8")
+BiocManager::install("Rgraphviz", version = "3.8")
+
+install.packages("gRbase", dependencies=TRUE)
+install.packages("gRain", dependencies=TRUE) 
+install.packages("gRim", dependencies=TRUE)
+```
+
+# Grafos no dirigidos
+
+## Grafo de dependencia
+
+Regresando a version probabilistica del modelo de grafos, vinculemos las nociones anteriores con sus implicaciones sobre $\mathbb{P}(\cdot)$. 
+
+Consideremos un **grafo probabilisitico** $J$-dimensional, para las variables
+$$
+X=\{X_j:j\in V\},
+$$
+donde 
+$$
+V=\{1,\ldots,J\}.
+$$
+
+El sunconjunto de variables aleatorias inducidas por un subconjunto $A\subset V$ es definido como
+$$
+\{X_j:j\in A\}.
+$$
+
+> Definimos la coleccion de subconjunto de $V$ como $\mathcal{A}=\{A:A\subset V\}$ tales que $\cup_{A\in\mathcal{A}}=V$.
+
+El soporte de las variables aleatorias en $X$ es definido como
+$$
+\mathcal{X}=\mathcal{X}_1 \times \cdots \times \mathcal{X}_J,
+$$
+donde $\mathcal{X}_j=\{1,\ldots,K_j\}$.
+
+> La **funcion de masas de probabilidades** para $X$ se define como
+$$
+\mathbb{P}(X=x)=p(x)=\prod_{A\in \mathcal{A}}\phi_A(x_A),
+$$
+donde $x_A$ son las coordenadas de $x$ asociadas con el subconjunto $A$. 
+
+* En este caso, la funcion $\phi(\cdot)$ no es una medida de probabilidad, necesariamente, solo requiere ser positiva.
+
+> **Definicion:-** El **grafo de dependencia** para $\mathbb{P}(\cdot)$ (o, analogamente, para $p(\cdot)$) es el **grafo** asociado con $\mathcal{A}$.
+
+### Ejemplo
+
+Supongamos que $J=6$ con la siguiente representacion para $p(\cdot)$,
+$$
+p(x)=p(x_1,x_2,x_3,x_4,x_5)=\phi_{1,2}(x_1,x_2)\phi_{2,3,4}(x_2,x_3,x_4)\phi_{3,5}(x_3,x_5)
+\phi_{4,5}(x_4,x_5)\phi_{6}(x_6).
+$$
+
+Entonces, el `grafo de dependencia` para $p(\cdot)$, denota por `g3`, es definido como:
+
+```{r}
+suppressMessages(library("gRbase"))
+suppressMessages(library("graph"))
+suppressMessages(library("RBGL"))
+suppressMessages(library("Rgraphviz"))
+
+g3 <- ug(~ 1:2 + 2:3:4 + 3:5 + 4:5 + 6)
+plot(g3)
+```
+En el caso anterior la dimension $X_6$ es aislada, lo que induce que esta dimension sea `independiente estocasticamente` de las restantes bajo $p(\cdot)$.
+
+## Propiedad de Markov
+
+La nocion de **simetria estocastica** entre las $J$ dimensiones de $X$ a traves de $\mathbb{P}(\cdot)$ (o $p(\cdot)$) se **especifica** o se **extrae** del **grafo de dependencia asociado.**
+
+En particular, si $\mathcal{G}=(V,E)$ es el **grafo de dependencia** asociado con $p(\cdot)$, y existen subconjuntos 
+$$
+A\subset V,\\
+B\subset V,
+$$
+
+separados por otro subconjunto
+$$
+S\subset V,
+$$
+entonces, $X_A$ y $X_B$ seran condicionalmente independientes dado $X_S$, i.e.
+$$
+(X_A \bigCI X_B) \ | \ X_S. 
+$$
+
+De acuerdo a lo anterior, la probabilidad $p(x_A,x_B,x_S)$ cumplira con la **factorizacion**,
+$$
+p(x_A,x_B,x_S)=\phi_{A,S}(x_A,x_S)\phi_{B,S}(x_B,x_S).
+$$
+
+### Ejemplo
+
+Retomando el ejemplo anterior con `g3`, podemos ver que  
+$$
+p(x)=p(x_1,x_2,x_3,x_4,x_5,x_6)=\left\{\phi_{1,2}(x_1,x_2)\right\} \times \left\{\phi_{2,3,4}(x_2,x_3,x_4)\phi_{3,5}(x_3,x_5)\phi_{4,5}(x_4,x_5)\right\}\times\left\{\phi_{6}(x_6)\right\},
+$$
+por lo que integrando $X_3$ y $X_6$ tenemos que
+$$
+(X_{1} \bigCI X_{4,5}) \ | \ X_{2}, 
+$$
+con 
+$$
+X_{4,5}=(X_{4},X_{5}).
+$$
+
+Este resultado es extraido de `g3`, de la siguiente forma:
+
+```{r}
+plot(g3)
+separates(c("4","5"), "1", "2", g3)
+```
+
+# Tablas de contingencia
+
+Para un conjunto de datos de $J$ `variables/dimensiones`, donde cada dimension contiene $K_j$ categorias, $\mathcal{X}_j=\{1,\ldots,K_j\}$, la `tabla de contingencia` $J$-dimensional se define como el arreglo $J$-dimensional
+$$
+T_J=\left(n_{e(1),\ldots,e(J)}\right),
+$$
+donde 
+$$
+e(j)\in \mathcal{X}_j,
+$$
+para $j=1,\ldots,J$.
+
+Es decir, cada dimension $j$ del arreglo contiene $K_j$ entradas.
+
+Si la tabla de contingencia de calcula a partir de $n$ datos, se cumple que
+$$
+n=\sum_{\{e(1),\ldots,e(J)\}}n_{e(1),\ldots,e(J)},
+$$
+donde 
+$$
+n_{e(1),\ldots,e(J)} = \#\{x_i:x_{i1}=e(1),\ldots,x_{iJ}=e(J)\},
+$$
+donde $x_i$s corresponden a los vectores $J$-dimensionlaes que componen los $n$ datos, con
+$$
+x_i=(x_{i1},\ldots,x_{iJ}).
+$$
+
+> Los datos tipicamente estan reportados como un `data.frame` donde cada `renglon` corresponde al vector $x_j$ y las columnas corresponden a las $J$ `variables/dimensiones` (en `R` reportadas como `as.factor`).
+
+## Ejemplo
+
+Consideremos los datos ilustrativos de 409 lagartos en las que se miden:
+
+* Especie, $S$ o $X_1$
+
+* Diametro, $D$ o $X_2$
+
+* Alto, $H$ o $X_3$.
+
+```{r}
+suppressMessages(library("gRbase"))
+data(lizardRAW, package="gRbase")
+data <- lizardRAW
+colnames(data) <- c("X2","X3","X1")
+data <- data[,c("X1","X2","X3")]
+head(data)
+dim(data)
+is.factor(data$X1)
+```
+
+Los `factores` para $X_1,X_2,X_3$ son:
+
+* $\mathcal{X_1}=\{1,2\}$,
+donde
+$$
+\begin{cases}
+X_1=1,& \text{dist}\\ 
+X_1=2,& \text{anoli}\\ 
+\end{cases}
+$$
+```{r}
+unique(data$X1)
+```
+
+* $\mathcal{X_2}=\{1,2\}$,
+donde
+$$
+\begin{cases}
+x_2=1,& \text{diam <= 4}\\ 
+x_2=2,& \text{diam > 4}\\ 
+\end{cases}
+$$
+```{r}
+unique(data$X2)
+```
+
+* $\mathcal{X_3}$
+donde
+$$
+\begin{cases}
+x_3=1,& \text{height <= 4.75}\\ 
+x_3=2,& \text{height > 4.75}\\ 
+\end{cases}
+$$
+```{r}
+unique(data$X3)
+```
+
+La `tabla de contingencia` (en este caso, el `arreglo de tres dimensiones`) es:
+```{r}
+data.tc <- table(data)
+data.tc
+sum(data.tc)
+```
+
+## Proposito
+
+El estudio de `tablas de contingencia` tiene en la estadistica dos propositos fundamentales:
+
+1. Estudiar las `interacciones` o `comovimientos` o `dependencia` entre las $X_j$s (en todos sus categorias).
+
+2. Anticipar futuros valores de $n_{e(1),\ldots,e(J)}$ para cada `celda` en la `tabla de contingencia`, con base en observaciones previas.
+
+### Notacion
+
+En el ejemplo previo, consideramos:
+
+* Denotaremos el conjunto de `vertices` como $$V=\{1,2,3\},$$ correspondientes a las tres `dimnesiones/variables` $$\{X_1,X_2,X_3\}.$$
+
+* El `vector aleatorio discreto`, $X_i$, es denotado por $$X_i=(X_{i,v}:v\in V),$$
+para $i=1,\ldots,n=409$.
+
+
+* La `configuracion` de $X_i$, que se refiere a las categorias especificas de la observacion $i$, se denota como $$x_{i}=(x_{i,v}:v\in V),$$ donde cada $$x_j=e(j)\in \mathcal{X}_j,$$ para $j=1,\ldots,J=3$.
+
+* Los `conteos` son las entradas de la `tabla de contingencia`, y corresponden a los casos
+$$
+n_{e(1),e(2),e(3)}=\#\{x_{i,v}:x_{i,1}=e(1),x_{i,2}=e(2),x_{i,3}=e(3)\}.
+$$
+
+* La `probabilidad` de que una observacion $X_v$ sea igual a $e(v)=(e(1),\ldots,e(J))$ es denotada por 
+$$
+\theta_v=p(x_{v})=\mathbb{P}(X_{v}=x_v)=\mathbb{P}(X_1=e(1),\ldots,X_J=e(J)).
+$$
+
+### Tablas marginales
+
+Para una `tabla de contingencia reducida` o `subtabla` correspondiente a un subconjunto `A\subset V`, tenemos los siguiente:
+
+* $X_A=\left(X_v:v\in A\right)$.
+
+* La configuracion correspondiente a $A$ sera denotada por $x_A$.
+
+* La `tabla marginal` (o `subtabla de contingencia`) para $A$ esta definida por los conteos $$
+n_{x_A}=\#\{x_{i,v}:v\in A, x_{i,A}=e(A)\}.
+$$
+
+* La `probabilidad marginal` de una observacion en la `tabla marginal`, $X_A$, se define como,
+$$
+\theta_A=p(x_{A})=\sum_{x':x'_A=x_A} \mathbb{P}(X_{v}=x'_v)=\sum_{x':x'_A=x_A} p(x'_v).
+$$
+
+Es decir, calculamos las probabilidades marginales para las `dimensiones` o `variables` en $A$.
+
+### Ejemplo
+
+En el caso del ejemplo previo, consideramos `marginalizar` respecto a `X_3`, i.e.
+$$
+A=\{1,2\},
+$$
+por lo que estaremos interesados en calcular la tabla de contingencias para $$(X_1,X_2)$$.
+
+Esto lo podemos calcular de dos formas:
+
+1. Marginalizacion de la `tabla original`, i.e.
+```{r}
+tableMargin(data.tc, c("X1","X2"))
+sum(tableMargin(data.tc, c("X1","X2")))
+```
+
+2. Como la tabla de contingencia de la `tabla reducida` respecto a $A$, i.e.
+```{r}
+table(data[,c("X1","X2")])
+sum(table(data[,c("X1","X2")]))
+```
+
+## Representaciones
+
+Una `tabla de contingencia` puede representarse de dos formas complementarias:
+
+1. En terminos de sus `configuraciones`, $$T_V=(n_v)_{v\in V},$$
+sujeto a 
+$$
+n_v \geq 0,
+$$
+para todo $v \in V$, y
+$$
+\sum_{v} n_v = n.
+$$
+
+
+Por ejemplo: 
+
+```{r}
+data.tc <- table(data)
+data.tc
+```
+
+2. En terminos de sus `probabilidades`, $$T_V=(\theta_v)_{v\in V},$$
+sujeto a 
+$$
+\theta_v \geq 0,
+$$
+para todo $v \in V$, y
+$$
+\sum_{v} \theta_v = 1.
+$$
+
+Por ejemplo: 
+
+```{r}
+data.prob <- table(data)/sum(table(data))
+data.prob
+```
+
+> En los siguientes modelos, estudiaremos `diferentes representaciones` de las probabilidades $\theta_v$ asociadas con una `tabla de contingencia` $T_v$. 
+
+# Modelos loglineales
+
+> Nota:- Las siguientes definiciones hacen referencia al `ejemplo previo`.
+
+Los `modelos loglineales`, representan las probabilidades $\theta_v$ de una tabla de contingencia $T_v$ de manera `logaditiva`, como
+$$
+\log \theta_v = \alpha^0,
+$$
+donde $\alpha^0$ es un factor unico comun para todas las `dimensiones` en $v$ y todas sus `categorias`.
+
+Otra alternativa, corresponderia a especificar,
+$$
+\log \theta_v = \alpha^{1}_{e(1)} + \alpha^{2}_{e(2)} + \alpha^3_{e(3)},
+$$
+donde $\alpha^j_{e(j)}$ corresponde a un factor particular para la `dimension` $j$ en la `categoria $e(j)$`, con $j=1,\ldots,J=3$.
+
+De manera complementaria, podriamos especificar las `probabilidades` de la siguiente forma:
+$$
+\log \theta_v = \alpha^0 + \alpha^{12}_{e(1,2)} + \alpha^{23}_{e(2,3)} + \alpha^{13}_{e(1,3)},
+$$
+donde $\alpha^{jk}_{e(j,k)}$ corresponde a un factor particular para las `dimensiones` $\{jk\}$, con $j,k=1,\ldots,J=3$, y sus correspondientes `categorias` $\{e(j),e(k)\}$.
+
+
+> Asi, podemos tener `multiples representaciones` para $\log \theta_{v}$ asociadas con una misma tabla de contingencia $T_v$.
+
+## Estructura
+
+> La estructura en el `modelo loglineal` se obtiene estableciendo los terminos de interaccion en $0$ siguiendo el principio de que si un termino de interaccion se establece en $0$, todos los terminos de orden superior que contienen esos terminos de interaccion tambien deben establecerse en $0$.
+
+### Ejemplo
+
+En el caso del `ejemplo previo`, consideremos que $\alpha^{2,3}_{e(2,3)}=0$, entonces todos los factores que contengan $\{e(1),e(2)\}$ deben ser iguales a $0$, i.e.
+$$
+\alpha^{1,2,3}_{e(1,2,3)}=0,
+$$
+para $$e(1,2,3)=\left(e(1),e(2),e(3)\right).$$
+
+## Generadores
+
+Los `modelos loglineales` pueden especificarse en terminos de sus `generadores` (`factores individuales` y `factores de interaccion` distintos de $0$).
+
+Por ejemplo, respecto al `ejemplo previo`, si:
+
+* definimos $\alpha^{2,3}_{e(2,3)}=0$ y 
+
+* definimos $\alpha^{1,2,3}_{e(1,2,3)}=0$,
+
+tenemos que los `generadores` pueden listarse como
+$$
+\{ \{1\}, \{2\}, \{3\}, \{(1,2)\}, \{(1,3)\} \}=\{X_1,X_2,X_3,X_{1,2},X_{1,3}\}.
+$$
+
+### Modelo saturado
+
+El `modelo saturado` se define como la representacion de $\log \theta_v$ correspondiente a no tener factores $a$s iguales a cero, i.e. en el `ejemplo previo`,
+$$
+\log \theta_v = \alpha^0 + \sum_{j}\alpha^j_{e(j)} + \sum_{jk} \alpha^{j,k}_{e(j,k)} + \alpha^{1,2,3}_{e(1,2,3)}.
+$$
+
+Los `generadores del modelo saturado`, por definicion, son 
+$$
+\{ \{1\}, \{2\}, \{3\}, \{(1,2)\}, \{(2,3)\}, \{(1,3)\}, \{(1,2,3)\}\}.
+$$
+
+> Nota:- El `modelo saturado` es, por construccion, no identificable estructuralmente hablando.
+
+### Modelo independiente
+
+El `modelo independiente` se define como el `modelo loglineal` para el cual todos los factores de interaccion entre `dimensiones/variables` son iguales a cero, i.e. en el `ejemplo previo`
+$$
+\log \theta_v = \alpha^0 + \sum_{j} \alpha^j_{e(j)}.
+$$
+
+En este caso, los generadores corresponden a las `dimensiones/variables` marginales $$\{1,2,3\}.$$
+
+> Nota:- El `modelo independiente` considera solamente las `contribuciones marginales` de cada `dimension`.
+
+## Grafo probablistico
+
+La `tabla de contingencia`, $T_v$, vista como un `grafo de probabilidad`, representara las `proabilidades` $\theta_v$ de acuerdo al `grafo inducido` $$\mathcal{G}(V,E),$$
+donde 
+
+* El conjunto $V$ corresponde a los `vertices/dimensiones` y 
+
+* El conjunto $E$ corresponde a los `bordes` inducidos por los `generadores` del `modelo loglineal correspondiente`.
+
+De esta manrea buscaremos representar las `probabilidades` de la siguiente forma
+$$
+\theta_{v}=\prod_{G\in \mathcal{C}_G}\phi_{A},
+$$
+donde 
+$$
+\mathcal{C}_G=\{G_1,\ldots,G_Q\},
+$$
+es la `clase generadora` del `modelo loglineal` correspondiente, siendo $Q$ el numero de elementos en $\mathcal{C}_G$.
+
+### Modelo independiente
+
+Por ejemplo, retomando el `ejemplo previo`, y considerando el `modelo independiente` tenemos que la `clase generadora` corresponde a 
+$$
+\mathcal{C}_G=\left\{ \{1\}, \{2\}, \{3\} \right\},
+$$
+i.e. $Q=3$, con $G_1=\{1\}$, $G_2=\{2\}$ y $G_3=\{3\}$.
+
+## Factorizacion
+
+A partir de la descompocion de $\theta_v$, podremos contrastar o aplicar el `teorema de factorizacion` de grafos:
+
+> Consideremos que $\mathcal{G}(V,E)$ define un `grafo de probabilidades` $\left(\theta_v\right)_{v\in V}$ con $\theta_v=\prod_{G\in \mathcal{G}_G}\phi_G$, con $\mathcal{G}_C$ inducida por $E$. Si existen subconjuntos $A$, $B$ y $S$ de $V$ tales que $$\theta_v = \phi_{A,S} \times \phi_{B,S},$$ diremos que $$A\bigCI B|S.$$
+
+Es decir, las `variables/dimensiones` en $A$ y en $B$ seran condicionalmente indeppendientes dado $S$.
+
+# Inferencia
+
+Hasta el momento, hemos revisado:
+
+* Teoria relevante de `grafos matematicos`
+
+* Especificaciones de `grafos probabilisticos`
+
+* Conexion con `modelos loglineales`.
+
+Todo esto para encontrar `especificaciones` de las probabilidades $\theta_v$s de una tabla de contingencia $T_v$.
+
+Recordemos que las `probabilidades` estan referidas a cada una de las observaciones, i.e. la tabla de contingencia $T_v$ del `ejemplo previo` se calcula como:
+
+```{r}
+data.prob
+```
+ De donde leemos que, para un `dato` `X_{i,v}` la `probabilidad` de que adopte la ``
+ $$
+ x_{i,v} = \left(x_{i,1}=\text{anoli},x_{2,1}=\text{<=4}, x_{i,3}=\text{=>4.75}\right),
+ $$
+ es
+ $$
+ \mathbb{P}(X_{i,v}=x_{i,v})=\theta_{e(1),e(2),e(3)} = 0.07823961,
+ $$
+con 
+$$
+\begin{eqnarray}
+ e(1) & = & \text{"anoli"}, \\
+ e(2) & = & \text{"<=4"}, \\
+ e(3) & = & \text{"<=4.75"}. \\
+\end{eqnarray}
+$$
+
+> Esto, considerando que las $\theta_v$s con `probabilidades no muestrales`. 
+
+## Parametrizacion
+
+Asi, el `grafo probabilistico` asociado con el `grafo` $\mathcal{G}(V,E)$ es parametrizado por 
+$$
+\{\theta_{v}:v\in V\},
+$$
+con 
+$$
+\theta_{v} \geq 0,
+$$
+y 
+$$
+\sum_{v}\theta_v = 1.
+$$
+
+Es decir, el `espacio parametral` del `grafo probabilistico` es el simplejo de dimension $\left(\prod_{j} K_j -1\right)$.
+
+## Verosimilitud
+
+Asi, la evidencia provista por un conjunto de `datos/configuraciones` de `n` objetos es representada por 
+$$
+lik\left(\theta_v|x_1,\ldots,x_n\right)=\prod_{i=1}^{n}\theta_{e(i)},
+$$
+con $$e(i)=\left(e(1),\ldots,e(J)\right),$$ la configuracion correspondiente a la observacion $i$.
+
+## Siguiente sesion
+
+* En la siguiente sesion estudiaremos el aspecto inferencial (`frecuentista` y `bayesiano`) asociado con los modelos de `grafos probabilisticos` para tablas de contingencia $T_v$.
+
+# Lecturas complementarias
+
+* Nota personal sobre tablas de contingencia $2\times 2$. `est46114_s19_suplemento1.pdf` 
+
+* Coppi, *An Introduction to Multi-Way Data and Their Analysis.* `est46114_s19_suplemento2.pdf` 
+ 

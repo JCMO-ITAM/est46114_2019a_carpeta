@@ -1,0 +1,468 @@
+---
+title: "Sesion 17 - Selección de Variables Parte 3/3"
+author:
+-  Juan Carlos Martínez-Ovando
+-  Maestría en Ciencia de Datos
+date: "Primavera 2019"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 2
+    number_sections: yes
+    self_contained: yes
+    theme: cerulean
+    highlight: textmate
+fig_align: "center"
+fig_width: 18
+---
+
+
+# Selección de variables  {.tabset .tabset-fade .tabset-pills}
+
+## Regularizacion y selección de variables
+
+**Regularizacion:-** Estudia el problema de optimizar la funcion de verosimilutud incorporando una funcion de perdida dada.
+
+De esta forma se garantiza un solo valor de minimizacion (en regresion, la colinealidad en covariables implica que la funcion de verosimilitud tenga multiples nodos en distintos valores de $\beta_j$s). La **regularizacion** toma lugar, en este contexto, a traves de un procedimiento de **reduccion de dimensionalidad parametral** (**shrinking**), reduciendo la funcion de verosimilitud en alguna direccion (casos en los que $\beta_j$s son cercanos a $0$).
+
+**Seleccion de variables:-** Por otro lado, trata acerca de la exploracion de diferentes combinaciones de las $p$ variables explicativas en $X$ con el proposito de encontrar la configuracion que mejor explique (con menor varianza) la relacion de $Y$ con la configuracion de $X_j$s relevante.
+
+**Ambos procedimientos reducen, en cierta forma, la dimensionalidad de $p$ covariables a un numero $q$ (con $q < p$) de covariables.**
+
+## Regresion *ridge*
+
+Una forma de entender este procedimiento de **regularizacion**, en el contexto de regresion, es a traves de un problema de minimizacion con restricciones.
+
+En este, la funcion de perdida $L(\beta,\sigma|y,X)$ se minmimiza sujeto a que la norma del vector de coeficientes de regresion no exceda de un cierto unmbral, i.e. se minimiza
+$$
+\text{L}^{r}(\beta,\sigma|y,X)=\text{L}(\beta,\sigma|y,X) + \lambda ||\beta||^2,
+$$
+siendo $\lambda$ el multiplicador de Lagrange empleado para imponer la restriccion descrita. 
+
+* Valores grandes de $\lambda$ inducen penalizaciones significativas sobre valores de $\beta_j$s poco verosimiles, reduciendolos a $0$
+
+* Valores pequenos de $\lambda$ inducen penalizaciones laxas. En el caso limite $\lambda \rightarrow 0$ recuperamos el modelo original.
+
+## Inferencia como optimizacion
+
+Tanto en el paradigma bayesiano como frecuentista, los metodos de regularizacion estan extrechamente ligados. 
+
+La solucion, en ambos casos, para $\beta$ sera tipicamente una funcion de la forma, 
+$$
+\left(\boldsymbol{X}'\boldsymbol{X}+\lambda \boldsymbol{I}\right)^{-1}\boldsymbol{X}'\boldsymbol{y},
+$$
+para $\lambda > 0$, encontrando valores de $\lambda$ que induzcan que 
+$$
+\left(\boldsymbol{X}'\boldsymbol{X}+\lambda \boldsymbol{I}\right)
+$$
+sea invertible  (rango completo).
+
+## Regresion *lasso*
+
+Otro metodo de regularizacion es el *lasso*, en el que la funcion de perdida se suaviza imponiendo la restriccion de un operador de seleccion particular *lasso* (***least-absolute-shrinkage and selector operator*), en cuyo caso la funcion de perdida se define como
+$$
+L^{1}(\beta,\sigma|y,X) = L(\beta,\sigma|y,X) + \lambda ||\beta||_{1},
+$$
+donde 
+$$||\beta||_{1}=\sum_{j=1}^{p}|\beta_j|,$$ 
+es la norma $L_1$ de $\beta$.
+
+Similarmente al caso *ridge*, en este caso:
+
+* Valores de $\lambda$ pequenos o cercanos a cero corresponbden vagamente al caso tradicional,
+
+* Valores de $\lambda$ grandes tienden a penalizar significativamente la posible multicolinealidad en las $X_j$s, combinada con falta de predictivilidad (correlacion) de estas variables con $Y$.
+
+## Vinculo con el paradigma bayesiano
+
+Ambos casos de regularizacion (*ridge* y *lasso*, asi como muchos otros) pueden concebirse dentro del contexto bayesiano.
+
+En ese caso, se considera que la funcion de penalizacion asociada con el multiplicador de lagrange, con relacion a la funcion de perdida, pueda incorporarse en la verosimilitud como una distribucion de probabilidad inicial sobre $\beta$ con un componente degenerado. 
+
+En este caso, el _tradicional supuesto de conjugacidad_ de la *prior* sobre $\beta$ y el modelo se relaja, empleando distribuciones **iniciales no conjugadas**, como las distribuciones de Laplace o degeneradas en $0$ (no absolutamente continuas). 
+
+Adicionalmente, el paradigma bayesiano permite identificar el valor de $\lambda$ que mejor se adecua a los datos, a traves de una distribucion parametrica sobre este y la estimacion simultanea sobre este componente.
+
+## Especificacion
+
+La especificacion bayesiana del modelo involucra que la distribucion inicial para los coeficientes de regresion sea de la forma:
+$$
+\pi(\beta_0,\ldots,\beta_p|\lambda_1,\ldots,\lambda_p,\sigma) = \prod_{j=0}^{p}\pi(\beta_j|\lambda_j,\sigma),
+$$
+donde, en este caso, $\pi(\beta_j)$ es tipicamente de la forma,
+$$
+\pi(\beta_j|\lambda_j,\sigma)\propto \exp\left\{-\frac{\lambda_j |\beta_j|}{\sigma}\right\},
+$$
+donde 
+
+* $\lambda_j$ es un coeficiente positivo fijo, y 
+
+* $\sigma$ es un parametro de escala desconocido. 
+
+Complementariamente, la **prior** para $\sigma$ es usualmente de la forma,
+$$
+\pi(\sigma) \propto \frac{1}{\sigma}\mathbb{I}_{(0,\infty)}(\sigma).
+$$
+Es decir, es una distribucion no informativa. Por consiguiente, $\pi(\beta,\sigma)$ sera en conjunto no informativa o difusa.
+
+### Aprendizaje estadistico
+
+El aprendizaje estadistico en esta clase de modelos involucra calcular la distribucion final
+$$
+\pi(\beta,\sigma,\lambda|\text{datos}) \propto l(\beta,\lambda|\text{datos}) \pi_{reg}(\beta,\sigma|\lambda) \pi(\lambda),
+$$
+la cual no puedeobtenerse de manrea analitica cerrada.
+
+* Esta distribucion se aproxima empleando algoritmos numericos de simulacion.
+
+El componente $\pi_{reg}(\beta,\sigma|\lambda)$ corresponde a la prior asociada con el procedimiento de regularizacion inducido por una **funcion de penalizacion** $f(\beta)$ dada, i.e.
+$$
+\pi_{reg}(\beta,\sigma)\propto \exp\left\{-\frac{\lambda}{2} \frac{f(\beta)}{\sigma^2} \right\}\left(\frac{1}{\sigma}\right).
+$$
+## Comentarios
+
+* La estimacion bayesiana de $\beta$ tipicamente descansa en `MAP`, i.e.
+
+$$
+\hat{\beta}_{reg]} = \arg\max_{\beta} l(\beta,\lambda,\sigma|\text{datos}) \pi_{reg}(\beta,\sigma|\lambda) \pi(\lambda).
+$$
+
+* El computo requerido, en este caso, es significativamente alto.
+
+* Por escalabibilidad, la solucion de regularizacion puede plantearse de manera simplificada empleando el `principio estimacion por minimos cuadrados`, como vemos a continuacion.
+
+# Idea complementaria  {.tabset .tabset-fade .tabset-pills}
+
+## Idea basica
+
+Consideremos el modelo de regresion
+$$
+y_t = \beta'x_t + \varepsilon_t,
+$$
+para $t=1,\ldots,n$.
+
+En este caso, sin hacer supuestos distribucionales sobre $\varepsilon_t$s, obtenemos que el EMC de $\beta$ es
+$$
+\hat{\beta}_{ols} = \arg\min_{\beta} \sum_{i=1}^{n} (y_i-\beta'x_i)^2.
+$$
+
+De la expresion anterior, recuperando la funcion de minimizacion, encontramos la siguiente identidad,
+$$
+\sum_{i=1}^{n} (y_i-\beta'x_i)^2 = ||y||^2 -2\beta'l+\beta'Q\beta,
+$$
+donde $l=\sum_{i}y_ix_i$ y $Q=(X'X)$.
+
+De esta forma, $\hat{\beta}_{ols}$ puede ahora obtenerse como,
+$$
+\hat{\beta}_{ols} = \arg\min_{\beta} \beta'Q\beta-2\beta'l.
+$$
+
+De esta expresion, es relativamente directo obtener que 
+$$
+\hat{\beta}_{ols} = (X'X)^{-1}l.
+$$
+
+## Regresion *ridge*
+
+En el caso de regresion *ridge* tenemos que el problema de obtimizacion se escribe como,
+$$
+\hat{\beta}_{ridge} = \arg\min_{\beta} \beta'Q\beta-2\beta'l + f(\beta),
+$$
+donde 
+* $ f(\beta)$ es una funcion de penalizacion, en este caso dada por
+$$
+ f(\beta) = \lambda \beta'\beta = \lambda \sum_{j}|\beta_j|^2,
+$$
+para algun $\lambda > 0$.
+
+El problema de optimizacion es ahora,
+$$
+\hat{\beta}_{lasso} = \arg\min_{\beta} \beta'Q\beta-2\beta'l + \lambda \beta'\beta.
+$$
+
+En este caso, la solucion del problema de optimizacion es
+$$
+\hat{\beta}_{ridge} = (Q+\lambda I)^{-1}l.
+$$
+
+> Este es el estimador bayesiano posterior respecto a la prior $\pi(\beta_j)=\text{N}(\beta|0,1/\lambda)$.
+
+## Regresion *lasso*
+
+En el caso *lasso*, la funcion de penalizacion es 
+$$
+f(\beta)=\lambda\sum_j|\beta_j|.
+$$
+El problema de optimizacion es ahora,
+$$
+\hat{\beta}_{lasso} = \arg\min_{\beta} \beta'Q\beta-2\beta'l + \lambda\sum_j|\beta_j|.
+$$
+Para esta funcion no existe solucion en forma cerrada.
+
+La solucion, en este caso, requerira:
+
+* Aprender optimización convexa y luego desarrollar el `script` de un algoritmo.
+
+* Usar un algoritmo `caja negra` de optimizacion.
+
+* Utilizar un truco simple...
+
+> Este ultimo lo estudiaremos en un ejercicio a casa.
+
+## Reparametrizacion
+
+### Caso unidimensional
+
+Partamos del supuesto en que $\beta$ es unidimensional y se desea minimizar alguna funcion de la forma,
+$$
+f(\beta)+\lambda|\beta|.
+$$
+
+--Este es el caso del modelo de regresion *lasso*.--
+
+Consideramos ahora la **reparametricemos** de $\beta$ en terminos de dos objetos $u$ y $v$ unidimensionales, y ahora necesitamos encontrar los valores de $u$ y $v$ que minimizan la funcion
+$$
+g(u,v)=f(uv)+\lambda u^2/2 + \lambda v^2/2.
+$$
+
+> ?`Como se obtienen los valores de $u$ y $v$?
+
+$$
+\min_{u,v} f(uv)+\lambda u^2/2 + \lambda v^2/2 
+ = 
+  \min_{\beta,u} f(\beta) + \lambda u^2/2 + \lambda (\beta/u)^2/2 \\
+ =  
+  \min_{\beta} f(\beta) + \lambda/2 \min_u \left(u^2+(\beta/u)^2\right) \\
+ =
+  \min_{\beta} f(\beta) + \lambda/2 \left(2\sqrt{\beta^2}\right) \\
+ =
+  \min_{\beta} f(\beta) + \lambda |\beta|.
+$$
+
+> Con esto se muestra la identidad en la solucion de ambas parametrizaciones.
+
+### Caso $p$-dimensional
+
+Ahora, **de manera general**, cuando $\beta$ es $p$-dimensional, definimos la **reparametrizacion**,
+$$
+\beta = u \circ v,
+$$
+donde $\circ$ denota el producto de Hadamard (*producto elemento-a-elemento*), de dos vectores$p$-dimensionales, $u$ y $v$.
+
+De manera analoga al caso unidimensional, tenemos ahora que el problema de optimizacion puede replantearse como
+$$
+\min_{\beta} f(\beta) + \lambda \sum_{i=1}^{p} |\beta_j|
+ =
+  \min_{u,v} f(u\circ v) + \lambda \frac{u'u}{2} + \lambda \frac{v'v}{2}. 
+$$
+
+## Comentarios
+
+* Si $f(\cdot)$ es una funcion convexa, la funcion a optimizar del lado izquierdo es convexa pero no diferenciable.
+
+* La optimizacion de esa funcion es extremadamente complicada, en terminos matematicos y numericos.
+
+* Por otro lado, la funcion a optimizar del lado derecho es convexa y diferenciable, por lo que puede minimizarse iterativamente para $u$ y para $v$.
+
+# Ejemplo *lasso*   {.tabset .tabset-fade .tabset-pills}
+
+Retomando el caso de regresion *lasso*, recordemos que 
+$$
+\hat{\beta}_{lasso} = \arg\min_{\beta} \beta'Q\beta - 2\beta'l + \lambda ||\beta||.
+$$
+
+Definiendo la reparametrizacion $\beta = u * v,$ podemos reexpresar el problema de optimizacion como,
+$$
+\hat{u}_{lasso},\hat{v}_{lasso} = \arg\min_{u,v} (u*v)'Q(u\circ v) - 2(u\circ v)'l + \lambda \frac{u'u}{2} + \lambda \frac{v'v}{2}.
+$$
+
+Como el procedimiento de optimizacion es iterativo, encontramos que $\hat{u}=\hat{u}(v)$ condicional en $v$ es  
+$$
+\hat{u}(v) = \arg\min_{u} (u\circ v)'Q(u*v) - 2(u\circ v)'l + \lambda \frac{u'u}{2} \\
+ = 
+  \arg\min_{u} u'(Q \circ vv'+\lambda/2 I)u - 2u'(v\circ l) \\
+ = 
+  (Q\circ vv'+\lambda/2 I)^{-1}(v\circ l).
+$$
+
+Una expresion analoga es relacionada con $\hat{v}(u)$.
+
+## Algoritmo
+
+De esta forma, el algoritmo para encontrar $\hat{\beta}_{lasso}$ a partir de $\hat{u}_{lasso}$ y $\hat{v}_{lasso}$ es especificado de la siguiente forma:
+
+1. Fijar valores iniciales $u^{(0)}$ y $v^{(0)}$ vectores $p$-dimensionales.
+
+2. Implementar iterativamente los siguientes pasos, para $k=1,2,\ldots,K$,
+
+$$
+u^{(k)} = \left( Q \circ v^{(k-1)}v^{(k-1)'} + \lambda/2 I \right)^{-1} \left( v^{(k-1)} \circ l \right),
+$$
+
+y
+
+$$
+v^{(k)} = \left( Q \circ u^{(k)} u^{(k)'} + \lambda/2 I \right)^{-1} \left( u^{(k)} \circ l \right).
+$$
+
+
+3. Definir un criterio de convergencia en $k$. 
+
+4. Para $k=K$, definir
+$$
+\hat{\beta}_{lasso} = \left( u^{(K)} \circ v^{(K)} \right).
+$$
+
+## Ilustracion
+
+```{r}
+load("est46114_s17_datos")
+datos <- yX_diabetes
+
+head(datos)
+dim(datos)
+```
+
+
+El modelo de regresion es definido csobre $y$ (primera columna en `datos`), respecto a las `63` mediciones restantes:
+
+```{r}
+y <- datos[-(1:100),1]
+ytest <- datos[1:100,1]
+
+X <- datos[-(1:100),-1]
+Xtest <- datos[1:100,-1] 
+
+dim(X) 
+
+colnames(X) 
+```
+
+El `estimador de minimos cuadrados` de $\beta$ (vector $63$-dimensional) de este modelo es:
+
+```{r}
+beta_ols <- solve(t(X)%*%X)%*%t(X)%*%y
+beta_ols
+```
+
+Y el `error cuadratico medio` es 
+
+```{r}
+mean( (ytest - Xtest%*%beta_ols)^2 ) 
+```
+
+### Reparametrizacion
+
+El modelo, considerado para la reparametrizacion, necesita $Q$ y $l$, 
+
+```{r}
+Q <- crossprod(X)
+l <- crossprod(X,y) 
+```
+
+Definimos el **peso de penalizacion**, $\lambda$, de la siguiente forma,
+
+```{r}
+lambda <- 3
+```
+
+De esta forma, tenemos los siguientes calculos complementarios:
+
+```{r}
+Il <- diag(ncol(X))*lambda
+#v <- sqrt(abs(fit_ols$coef))
+v <- sqrt(abs(beta_ols))
+```
+
+### Algoritmo
+
+El algoritmo iterativo require la especificacion de $S$ (numero de iteraciones), que en este caso lo fijamos en `S=100`.
+
+Asi, el algoritmo es:
+
+```{r}
+S <- 100
+s <- 1
+for(s in 1:S){ 
+  u<- solve( Q * v%*%t(v) + Il/2 )%*%( l*v )
+  v<- solve( Q * u%*%t(u) + Il/2 )%*%( l*u )  
+  }
+```
+
+El **estimador regularizado** de $\beta$ bajo esta funcion de perdida es el producto de Hadamard del ultimo $u$ y $v$, i.e.
+
+```{r}
+beta_l1p <- u*v
+```
+
+El `error cuadratico medio` en este caso regularizado es:
+
+```{r}
+mean( (ytest - Xtest%*%beta_l1p)^2 )  
+```
+
+### Mas reparametrizaciones
+
+Pordmoe considerar mas reparametrizaciones, entonces obtener:
+
+```{r}
+v <- w <- x <- (abs(beta_ols))^(.25)   
+```
+
+Y el siguiente algoritmo extendido:
+
+```{r}
+s <- 1
+for(s in 1:S){
+    u<- solve( Q * (v*w*x)%*%t(v*w*x) + Il/4 )%*%( l*v*w*x )
+    v<- solve( Q * (u*w*x)%*%t(u*w*x) + Il/4 )%*%( l*u*w*x )
+    w<- solve( Q * (u*v*x)%*%t(u*v*x) + Il/4 )%*%( l*u*v*x )
+    x<- solve( Q * (u*v*w)%*%t(u*v*w) + Il/4 )%*%( l*u*v*w )
+    }
+```
+
+En cuyo caso, tenemos el siguiente **estimador regularizado** de $\beta$, dado por:
+
+```{r}
+beta_lhp <- u*v*w*x
+```
+
+En cuyo caso, resulta en el siguiente `error cuadratico medio`.
+
+```{r}
+mean( (ytest - Xtest%*%beta_lhp)^2 )
+```      
+
+# Discusion {.tabset .tabset-fade .tabset-pills}
+
+## Generales
+
+* Los metodos de regularizacion o de seleccion estocastica de variables que hemos revisado *reducen el espacio parametral* del modelo de regresion (colapsando algunos coeficientes de regresion $\beta_j$ a $0$).
+
+* Indirectamente, resuelven el problema de `seleccion de variables`.
+
+* Ninguno de estos metodos require enunciar el numero total $M$ de configuraciones de modelos (caso general $M=2^p$).
+
+## Particulares
+
+* La seleccion de variables corrige por `multicolinealidad` de las covariables, pero no corrigen por `raleza` (`sparcity`) en los datos.
+
+* En este ultimo caso, otras funciones de penalizacion son mas utiles:
+
+1. `Spike-and-slab`
+
+2. `Horseshoe`
+
+En partciular, estas ultimas son utiles cuando $n << p$.
+
+
+# Lecturas {.tabset .tabset-fade .tabset-pills}
+
+## Complementarias
+
+* Park & Casella, *The Bayesian Lasso*. `est46114_s17_suplemento1.pdf`
+
+* O'Hara & Sillampaa, *A Review of Bayesian Variable Selection Methods: What, How and Which*. `est46114_s17_suplemento2.pdf`
+
+* Bhara et al, *Lasso Meets Horseshoe: A Survey*. `est46114_s17_suplemento3.pdf`

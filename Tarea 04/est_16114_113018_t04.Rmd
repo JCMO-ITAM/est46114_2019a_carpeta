@@ -1,0 +1,92 @@
+---
+title: "est46114_Tarea_04"
+author: "Paulina Gómez Mont W"
+date: "3/17/2019"
+output: html_document
+---
+
+```{r}
+library(MCMCpack)
+library(tidyverse)
+getwd()
+data <- read.csv("/Users/paugmw/Dropbox/Documentos windows/Documentos/ITAM/2_Semestre/Estadistica_Multivariada_Y_Datos_Categoricos/Tarea/est46114_s06_data.csv")
+data <- as.data.frame(data)
+data <- as.matrix(data)
+T <- nrow(data); p <- ncol(data)-2
+datats <- ts(data[,c(2:3,81)],start=c(1970, 1), end=c(2010, 12), frequency=12)
+plot(datats)
+```
+
+##Modelo 1 factor
+```{r}
+
+datatsc <- datats %>% as.data.frame()
+
+
+
+datatsc.3 <- as.data.frame(datatsc[,c("Canada","Mexico","Zambia")])
+datatsc.3$Canada <- as.numeric(datatsc.3$Canada)
+datatsc.3$Mexico <- as.numeric(datatsc.3$Mexico)
+datatsc.3$Zambia <- as.numeric(datatsc.3$Zambia)
+
+fa.posterior1 <- MCMCfactanal(~Canada+Mexico+Zambia, 
+                             factors=1,
+                             verbose=0, store.scores=FALSE, 
+                             a0=1, b0=0.15,
+                             data=datatsc.3, 
+                             burnin=50, mcmc=200, thin=1)
+
+#fa.posterior
+
+summary(fa.posterior1)
+
+```
+##Modelo 2 factor
+```{r}
+
+
+
+
+
+
+
+fa.posterior2 <- MCMCfactanal(~Canada+Mexico+Zambia, 
+                             factors=2,
+                             lambda.constraints=list(Mexico1=c(1,0), 
+                                                     Zambia1=c(1,0)),
+                             verbose=0, store.scores=FALSE, 
+                             a0=1, b0=0.15,
+                             data=datatsc.3, 
+                             burnin=50, mcmc=200, thin=1)
+
+#fa.posterior
+
+summary(fa.posterior2)
+
+```
+
+##Modelo de factores est ́atico (medias cambiantes)
+```{r}
+
+library("bayesdfa")
+datatsc.3 <- data.matrix(datatsc.3)
+dfa.posterior3 <- fit_dfa(y = t(datatsc.3), iter = 200, chains = 1)
+ls(dfa.posterior3)
+summary(dfa.posterior3)
+```
+
+##Uno de los modelos dinamicos (en medias o, preferentemente, en volatilidad estocáastica).
+```{r}
+
+
+library("factorstochvol")
+
+
+
+dsfa.posterior4 <- fsvsample(datatsc.3, 
+                            factors = 1, 
+                            draws = 200, burnin = 50, runningstore = 6)
+oldpar <- par(ask = FALSE)
+plot(dsfa.posterior4)
+
+```

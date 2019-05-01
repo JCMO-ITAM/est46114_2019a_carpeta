@@ -1,0 +1,416 @@
+---
+title: "Sesion 18 - Datos Categoricos y Modelos de Grafos Probabilisticos Parte 2/"
+author:
+-  Juan Carlos Martínez-Ovando
+-  Maestría en Ciencia de Datos
+date: "Primavera 2019"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 2
+    number_sections: yes
+    self_contained: yes
+    theme: cerulean
+    highlight: textmate
+fig_align: "center"
+fig_width: 18
+---
+
+# Objetivos
+
+En esta sesion:
+
+* Estudiaremos definiciones y propiedades teoricas de los **modelos de grafos probabilisticos.**
+
+* Implementaremos las soluciones con las librerias `gRbase`, `gRain` y `gRim`:
+
+```
+if(!requireNamespace("BiocManager", quietly = TRUE)){install.packages("BiocManager")}
+BiocManager::install("graph", version = "3.8")
+BiocManager::install("RBGL", version = "3.8")
+BiocManager::install("Rgraphviz", version = "3.8")
+
+install.packages("gRbase", dependencies=TRUE)
+install.packages("gRain", dependencies=TRUE) 
+install.packages("gRim", dependencies=TRUE)
+```
+
+# Modelos de grafos probabilisticos
+
+Iniciaremos con el estudio de la **medida de probabilidad conjunta** para $J$ variables/dimensiones,
+$$
+\mathbb{P}(X_1,\ldots,X_J),
+$$
+para la cual todas las versiones marginales reducidas existen.
+
+Recordemos que el soporte de cada $X_j$, es
+$$
+\mathcal{X}_j=\{1,2,\ldots,K_j\},
+$$
+para $j=1,\ldots,J$.
+
+
+> Aunque el estudio de estos modelos sera aterrizado en el contexto de **variables categoricas**, muchas de las propiedades que mencionaremos son extendibles a modelos con diferentes soportes.
+## Independencia condicional
+
+Estudiaremos algunas propiedades relevantes para la especificacion de esta medida de probabilidad conjunta, en particular:
+
+* Independencia condicional
+
+* Direccion de asociaciones.
+
+## Independencia condicional
+
+Para un conjunto de dos variables/dimensiones, $X_1$ y $X_2$, se dira que son **independientes** si
+$$
+\mathbb{P}(X_1,X_2)=\mathbb{P}(X_1) \mathbb{P}(X_2).
+$$
+
+Por consecuencia, tendremos
+$$
+\mathbb{P}(X_1|X_2)=\mathbb{P}(X_1),\\
+\mathbb{P}(X_2|X_1)=\mathbb{P}(X_2).
+$$
+
+\newcommand{\bigCI}{\mathrel{\text{$\perp\mkern-10mu\perp$}}}
+
+Denotaremos cuando dos variables/dimensiones son independientes, como en el caso anterior, de la forma,
+$$
+X_1 \bigCI X_2.
+$$
+
+### Independencia condicional
+
+Considerando tres variables/dimensiones, $X_1$, $X_2$ y $X_3$, diremos que $X_1$ y $X_2$ son condicionalmente independientes dado $X_3$, si
+$$
+\mathbb{P}(X_1,X_2|X_3)=\mathbb{P}(X_1|X_3) \mathbb{P}(X_2|X_3).
+$$
+En este caso, tal relacion se denotara como
+$$
+(X_1 \bigCI X_2) \ | \ X_3,
+$$
+para **todos los valores de** $X_3$. De manera analoga al caso de independencia, tendremos
+$$
+\mathbb{P}(X_1|X_2,X_3)=\mathbb{P}(X_1|X_3),\\
+\mathbb{P}(X_2|X_1,X_3)=\mathbb{P}(X_2|X_3).
+$$
+
+> Este resultado se generaliza para bloques de variables/dimensiones definidos de manera arbitraria.
+
+### Factorizacion
+
+En el caso de independencia condicional, $$(X_1 \bigCI X_2) \ | \ X_3$$, sera obtenida si la medida de probabilidad conjunta para $(X_1,X_2,X_3)$ puede **factorizarse** de la siguiente forma
+$$
+\mathbb{P}(X_1,X_2,X_3)=f(X_1,X_3)g(X_2,X_3),
+$$
+para dos funciones $f(\cdot)$ y $g(\cdot)$ positivas.
+
+### Ejemplo de factorizacion
+
+Considerando $(X_1,X_2,X_3)$ tres variables/dimensiones discretas, definimos
+$$
+\theta_{ijk}=\mathbb{P}(X_1=i,X_2=j,X_3=k),
+$$
+con $i\in \mathcal{X}_1$, $j\in \mathcal{X}_2$ y $k\in \mathcal{X}_3$.
+
+Si expresamos $\theta_{ijk}$ como
+$$
+\log \theta_{ijk} = \alpha_{1,i} + \alpha_{2,j} + \alpha_{3,k} + \beta_{12,ij} + \beta_{23,jk},
+$$
+para todo $i,j,k$, tenemos que podemos expresar $\theta_{ijk}$ de la forma,
+$$
+\theta_{ijk}=f(i,k)g(j,k),
+$$
+para todo $i,j,k$.
+
+Por lo que se cumple que 
+$$(X_1 \bigCI X_2) \ | \ X_3.$$
+
+> La especificacion de este modelo corresponde a un caso particular de los **modelos log-lineales**. Mas adelante los definiremos con precision.
+
+# Grafos no dirigidos
+
+## Asociaciones
+
+> **Definicion:-** Un **grafo** es un objeto matematico de un par de `vertices/nodos/variables/dimensiones`, $V$, y un conjunto de `bordes/conectores`, $E$. El drafo se denota por $\mathcal{G}=(V,E)$.
+
+Un **borde** se define como una `conexion` entre dos `nodos`.
+
+> Cuando los **bordes** solo conectan nodos, pero sin direccion, se dice que $\mathcal{G}$ es un **grafo no dirigido**.
+
+> **Definicion:-** Dada una coleccion de `nodos/vertices`, $V$, y una coleccion $\mathcal{A}=\{a_1,\ldots, a_Q\}$ de $V$ ($a_l \subset V$) tal que $\cup_{l}a_l=V$, el **grafo generado por** $\mathcal{A}$ se define como $$\mathcal{G}(\mathcal{A})=(V,E),$$ donde $E$ es definido como $\{a,b\}\in E$ si-y-solo-si $\{a,b\}\subset a_l$ para algun $l$.
+
+
+En `R` podemos `crear` y `visualizar` grafos no dirigidos de la siguiente las funciones `ug` y `plot`.
+
+Para este ejemplo, consideramos que los `nodos/dimensiones` por relacionar corresponden a los indices
+$$
+\{1,2,3,4,5,6,7\},
+$$
+con la estructura de asociacion particular.
+
+```{r}
+suppressMessages(library("gRbase"))
+suppressMessages(library("Rgraphviz"))
+
+g1 <- ug(~1:2:5 + 1:3:5 + 2:4:5 + 3:4:5 + 3:7 + 4:6)
+class(g1)
+
+plot(g1)
+```
+
+## Matrices de adyacencia
+
+> Los `nodos` y `bordes` de un grafo pueden ser definidos a partir de las **matrices de adyacencia**, que son matrices cuadradas de dimension $J\times J$ en las que se define la asociacion entre nodos correspondientes.
+
+A continuacion, definimos una matriz de adyacencia para cinco `nodos`,
+$$
+\{1,2,3,4,5\}.
+$$
+Con la funcion `as()` se le asigna atributos un *objeto de grafo*, `graphNEL`.
+
+```{r}
+m <- matrix(c(0, 1, 1, 0, 1, 
+              1, 0, 0, 1, 1, 
+              1, 0, 0, 1, 1, 
+              0, 1, 1, 0, 1, 
+              1, 1, 1, 1, 0), nrow = 5)
+rownames(m) <- colnames(m) <- c("1", "2", "3", "4", "5")
+m
+as(m, "graphNEL")
+```
+
+## Modificacion de grafos
+
+Los `bordes` de un grafo pueden *modificarse* (quitando o anadiendolos) de la siguiente forma
+
+```{r}
+g1a <- addEdge("1", "4", g1)
+g1b <- removeEdge("3", "4", g1)
+
+par(mfrow = c(1, 3))
+plot(g1, main = "g1")
+plot(g1a, main = "g1a")
+plot(g1b, main = "g1b")
+```
+
+## Subgrafos
+
+Cada parte de un grafo sera a su vez un grafo en si mismo, de acuerdo a la siguiente definicion.
+
+> **Definicion:-** Un **subgrafo** $\mathcal{G}'=(V',E')$ de $\mathcal{G}=(V,E)$ es definido asi si $V' \subset V$ y $E'\subset E$.
+
+De manera analoga, si consideramos un subconjunto de `vertices` $A\subset V$, entonces este subconjunto definira un `subgrafo` del grafo donde $V$ este definido.
+
+> **Definicion:-** El **subgrafo inducido** por $A\subset V$ de $\mathcal{G}=(V,E)$ es definido como $\mathcal{G}_A=(A,E_A)$, donde $E_A$ es el conjunto de `nodos` asociados con los vertices en $A$.
+
+Del grafo que hemos definido antes, `g1`, podemos extraer el subgrafo asociado con 
+$$
+A=\{2,3,4,5\},
+$$
+de la siguiente forma.
+
+```{r}
+g1_A <- subGraph(c("2", "3", "4", "5"), g1)
+
+par(mfrow = c(1, 3))
+plot(g1, main = "g1")
+plot(g1_A, main = "g1_A")
+```
+
+## Cliques
+
+Los `cliques` de un grafo se definen, *grosso modo*, como el subgrafo asociado con `vertices` y `nodos` completamente conectados.
+
+> **Definicion:-** Un subconjunto de vertices $C\subset E$ de $\mathcal{G}$ es **completo** si todos los pares de vertices en $C$ estan conectados por un `borde`. 
+
+Diremos que un grafo $\mathcal{G}=(V,E)$ es completo si $V$ es un conjunto completo de vertices.
+
+> Un **clique** de un grafo $\mathcal{G}$ es un **subgrafo completo** que no esta contenido en otro grafo completo mas grande.
+
+Es decir, un **clique** es un *subgrafo completo maximal*. 
+
+Podemos preguntarnos si un grafo dado es *completo maximal* o no. Por ejemplo, para el grafo `g1` anterior, tenemos:
+
+```{r}
+is.complete(g1)
+```
+
+Este resultado no es sorprendente, ya lo habiamos notado por los extremos `6` y `7`.
+
+Ahora bien, el sugrafo inducido por 
+$$
+B=\{1,2,5\},
+$$
+si es completo.
+
+```{r}
+g1_B <- subGraph(c("1", "2", "5"), g1)
+
+plot(g1_B, main = "g1_B")
+
+is.complete(g1_B)
+```
+
+Pero este no es el unico subgrafo completo de `g1`, veamos:
+
+```{r}
+library("RBGL")
+maxClique(g1)
+str(maxClique(g1))
+```
+
+En este caso tenemos `4 cliques` para `g1`. 
+
+## Separacion
+
+En estas propedades, estudiaremos si es posible ver a un grafo $\mathcal{G}=(V,E)$ como subgrafos ajenos. Esta propiedad se define tn terminos de los `vertices`.
+
+> Se dice que un subconjunto $S\subset V$ es separado de otro subconjunto $R\subset V$ si ningun vertice en $S$ esta conectado con los vertices en $R$.
+
+La conexion de vertices se define en terminos de las **trayectorias** entre dos vertices $v_1$ y $v_2$ en **grafos no dirigidos**, definidas como el conjunto de vertices $\{a_0,\ldots,a_n\}$ tales que
+
+* $a_0=v_1$, $a_n=v_2$
+
+* $\{a_{j-1},a_j\}\in E$ definen un `borde`, para $j=1,\ldots, n$.
+
+En este caso, $n$ define la **longitud de la trayectoria**. 
+
+**Observen:-** Las trayectorias pueden no ser unicas.
+
+**Observen:-** Algunas trayectorias pueden ser ciciclas, cuando algun $a_j$ de la trayectoria corresponde a $v_1$ o $v_2$.
+
+> Se dice que un sunconjunto $S\subset V$ **separa a dos sunconjuntos ajenos** $A,B\subset V$ si toda trayectoria de un vertice en $A$ y otro vertice en $B$ incluye un `borde` con un vertice en $S$.
+
+Por ejemplo, creamos el grafo `g2`,
+
+```{r}
+g2 <- ug(~1:2:5 + 1:3:5 + 2:4:5 + 3:4:5)
+plot(g2)
+```
+
+y evaluamos si el conjunto $A=\{1\}$ y $B=\{4\}$ son separados por $S=\{2,3,5\}$:
+
+```{r}
+separates("1", "4", c("2", "3", "5"), g2)
+```
+
+
+Pero, por ejmplo, $A=\{1,2\}$ y $B=\{3,4\}$ no son separados por $S=\{5\}$:
+
+```{r}
+separates(c("1","2"), c("3","4"), c("5"), g2)
+```
+
+## Grafo de dependencia
+
+Regresando a version probabilistica del modelo de grafos, vinculemos las nociones anteriores con sus implicaciones sobre $\mathbb{P}(\cdot)$. 
+
+Consideremos un **grafo probabilisitico** $J$-dimensional, para las variables
+$$
+X=\{X_j:j\in V\},
+$$
+donde 
+$$
+V=\{1,\ldots,J\}.
+$$
+
+El sunconjunto de variables aleatorias inducidas por un subconjunto $A\subset V$ es definido como
+$$
+\{X_j:j\in A\}.
+$$
+
+> Definimos la coleccion de subconjunto de $V$ como $\mathcal{A}=\{A:A\subset V\}$ tales que $\cup_{A\in\mathcal{A}}=V$.
+
+El soporte de las variables aleatorias en $X$ es definido como
+$$
+\mathcal{X}=\mathcal{X}_1 \times \cdots \times \mathcal{X}_J,
+$$
+donde $\mathcal{X}_j=\{1,\ldots,K_j\}$.
+
+> La **funcion de masas de probabilidades** para $X$ se define como
+$$
+\mathbb{P}(X=x)=p(x)=\prod_{A\in \mathcal{A}}\phi_A(x_A),
+$$
+donde $x_A$ son las coordenadas de $x$ asociadas con el subconjunto $A$. 
+
+* En este caso, la funcion $\phi(\cdot)$ no es una medida de probabilidad, necesariamente, solo requiere ser positiva.
+
+> **Definicion:-** El **grafo de dependencia** para $\mathbb{P}(\cdot)$ (o, analogamente, para $p(\cdot)$) es el **grafo** asociado con $\mathcal{A}$.
+
+### Ejemplo
+
+Supongamos que $J=6$ con la siguiente representacion para $p(\cdot)$,
+$$
+p(x)=p(x_1,x_2,x_3,x_4,x_5)=\phi_{1,2}(x_1,x_2)\phi_{2,3,4}(x_2,x_3,x_4)\phi_{3,5}(x_3,x_5)
+\phi_{4,5}(x_4,x_5)\phi_{6}(x_6).
+$$
+
+Entonces, el `grafo de dependencia` para $p(\cdot)$, denota por `g3`, es definido como:
+
+```{r}
+g3 <- ug(~ 1:2 + 2:3:4 + 3:5 + 4:5 + 6)
+plot(g3)
+```
+En el caso anterior la dimension $X_6$ es aislada, lo que induce que esta dimension sea `independiente estocasticamente` de las restantes bajo $p(\cdot)$.
+
+## Propiedad de Markov
+
+La nocion de **simetria estocastica** entre las $J$ dimensiones de $X$ a traves de $\mathbb{P}(\cdot)$ (o $p(\cdot)$) se **especifica** o se **extrae** del **grafo de dependencia asociado.**
+
+En particular, si $\mathcal{G}=(V,E)$ es el **grafo de dependencia** asociado con $p(\cdot)$, y existen subconjuntos 
+$$
+A\subset V,\\
+B\subset V,
+$$
+
+separados por otro subconjunto
+$$
+S\subset V,
+$$
+entonces, $X_A$ y $X_B$ seran condicionalmente independientes dado $X_S$, i.e.
+$$
+(X_A \bigCI X_B) \ | \ X_S. 
+$$
+
+De acuerdo a lo anterior, la probabilidad $p(x_A,x_B,x_S)$ cumplira con la **factorizacion**,
+$$
+p(x_A,x_B,x_S)=\phi_{A,S}(x_A,x_S)\phi_{B,S}(x_B,x_S).
+$$
+
+### Ejemplo
+
+Retomando el ejemplo anterior con `g3`, podemos ver que  
+$$
+p(x)=p(x_1,x_2,x_3,x_4,x_5,x_6)=\left\{\phi_{1,2}(x_1,x_2)\right\} \times \left\{\phi_{2,3,4}(x_2,x_3,x_4)\phi_{3,5}(x_3,x_5)\phi_{4,5}(x_4,x_5)\right\}\times\left\{\phi_{6}(x_6)\right\},
+$$
+por lo que integrando $X_3$ y $X_6$ tenemos que
+$$
+(X_{1} \bigCI X_{4,5}) \ | \ X_{2}, 
+$$
+con 
+$$
+X_{4,5}=(X_{4},X_{5}).
+$$
+
+Este resultado es extraido de `g3`, de la siguiente forma:
+
+```{r}
+plot(g3)
+separates(c("4","5"), "1", "2", g3)
+```
+
+# Siguiente sesion
+
+En la siguiente sesion:
+
+* Estudiaremos la especificacion de los modelos log-lineales para tablas de contingencia de $2\times 2$ como un modelo de grafos probabilisticos.
+
+* Estudiaremos la extension de estas especificaciones para tablas de contingencia multiples (*multi-way contingency tables*).
+
+# Lecturas complementarias
+
+* Nota personal sobre tablas de contingencia $2\times 2$. `est46114_s19_suplemento1.pdf` 
+
+* Coppi, *An Introduction to Multi-Way Data and Their Analysis.* `est46114_s19_suplemento2.pdf` 

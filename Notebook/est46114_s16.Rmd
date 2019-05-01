@@ -1,5 +1,5 @@
 ---
-title: "Sesion 15 - Selección de Variables Parte 2/3"
+title: "Sesion 16 - Selección de Variables Parte 2/3"
 author:
 -  Juan Carlos Martínez-Ovando
 -  Maestría en Ciencia de Datos
@@ -19,7 +19,11 @@ fig_width: 18
 
 # Seleccion estocastica de variables {.tabset .tabset-fade .tabset-pills}
 
-# Datos
+## Especificacion
+
+
+
+## Datos
 
 En estas notas ilustramos el procedimiento de **seleccion estocastica de variables** (SSVS por sus siglas en ingles) en el contexto de un modelo lineal generalizado probit.
 
@@ -29,11 +33,9 @@ Asi, empleamos la siguiente notacion:
 
 * $y \in \{0,1\}$, siendo $1$ si el nacimiento fue `prematuro` y $0$ para el otro caso,
 
-* $x$ representa el nivel/dosis administrada de `dde`
+* $x$ representa el nivel/dosis administrada del medicamento `dde`
 
-* $z_1, \ldots, z_5$ - variables adicionales.
-
-## Datos simulados
+* $w_1, \ldots, w_5$ - covariables adicionales.
 
 Mostramos los datos a continuacion:
 
@@ -41,7 +43,7 @@ Mostramos los datos a continuacion:
 if(!require('mvtnorm')){install.packages("mvtnorm")}
 library("mvtnorm")
 
-dde <- read.csv('est46114_s17.csv', 
+dde <- read.csv('est46114_s16.csv', 
                 header = TRUE, sep = ",", 
                 quote="\"", dec=".", fill = TRUE)
 head(dde)
@@ -52,7 +54,7 @@ plot(dde)
 
 ## Estanzarizacion
 
-Y su version **normalizada** para `dde`,
+Y su version **estandarizada** para `dde`,
 
 ```{r}
 dde$x<- (dde$x - mean(dde$x))/sqrt(var(dde$x)) 
@@ -62,22 +64,36 @@ plot(dde)
 
 # Modelo  {.tabset .tabset-fade .tabset-pills}
 
-El modelo que consideramos es **probit lineal**, el cual relaciona la probabilidad de $\{y=1\}$ condicional en $w=(x,z_1,\ldots,z_5)$ como
+El modelo que consideramos es **probit lineal**, el cual relaciona la probabilidad del evento $\{Y=1\}$ con las covariables condicionales $w=(x,z_1,\ldots,z_5)$, como
 $$
-\mathbb{P}\left(y=1|w\right)=\Phi\left(\beta'w\right),
+\mathbb{P}\left(Y_i=1|w_i\right)=\Phi\left(\beta'w_i\right),
 $$
-donde $\Phi(\cdot)=N(\cdot|0,1)$ y $\beta=(\beta_x,\beta_1,\ldots,\beta_5)$.
+para $i=1,\ldots,n$, donde,
 
-Como vimos en clase, el modelo puede expresarse de manrea extendida empleando variables latentes. En particular, se introduce al modelo la variable latente $z$ que sirve como elemento conector de $\beta'w$ y $\Phi$. Así, el modelo queda expresado como
+* $\Phi(\cdot)=N(\cdot|0,1)$ es la funcion de distribucion (acumulacion de probabilidades) de la distribucion gaussiana, y 
+
+* $\beta=(\beta_x,\beta_1,\ldots,\beta_5)$ es el vector de coeficientes de regresion.
+
+> Como vimos en clase, el modelo puede expresarse de manrea extendida empleando variables latentes. 
+
+En particular, se introduce al modelo la variable latente $Z$ que sirve como elemento conector de $\beta'w$ y $\Phi$. Así, el modelo queda expresado como
 
 \begin{eqnarray}
-y|z & \sim & Ber\left(\cdot|\theta=Pr(z > 0)\right) \\
-z|w & \sim & N(\cdot|\beta'w,1).
+Y_i|Z_i & \sim & Ber\left(\cdot|\theta=Pr(Z_i > 0)\right) \\
+Z_i|w_i & \sim & N(z|\beta'w_i,1),
 \end{eqnarray}
+para $i=1,\ldots,n$.
 
-El modelo anterio, incluyendo la variable latente $z$, es no lineal, por lo que estimar $\beta$ no es una tarea sencilla. A continuacion presentamos dos versiones para su estimacion: frecuentista y bayesiana.
+El modelo anterior, incluyendo las variables latentes $Z_i$s, es lineal en los coeficientes de regresion $\beta$, aunque su estimacion no es una tarea sencilla. 
 
-# Implementacion  {.tabset .tabset-fade .tabset-pills} 
+A continuacion presentamos dos versiones para su estimacion: 
+
+* frecuentista y 
+
+* bayesiana.
+
+
+# Implementacion del modelo saturado  {.tabset .tabset-fade .tabset-pills} 
 
 ## Analisis frecuentista
 
@@ -90,26 +106,34 @@ $$
 La maximizacion de esta funcion se obtiene empleando metodos numericos, en particular el algoritmo EM. La funcion `glm` realiza esta tarea.
 
 ```{r}
-X <- cbind(1, dde$x,dde$z1,dde$z2,dde$z3,dde$z4,dde$z5)
+X <- cbind(1, dde$x,dde$w1,dde$w2,dde$w3,dde$w4,dde$w5)
 Y <- dde$y
 dde_mle <- glm(Y ~ -1+X, family=binomial("probit"))
 summary(dde_mle)
 
-beta_mle <- dde_mle$coef
-beta_mle
+betamle <- dde_mle$coef
+betamle
 ```
 
 **Que pasaria si incorporamos un termino constante en el predictor lineal?**
 
 ##		Analisis bayesiano
 
-En el contexto bayesiano, el `modelo` que describimos anteriormente se complementa con la distribucion sobre nuestro nivel de creencia entorno a los valores plausibles de $\beta$, i.e. la distribucion inicial sobre $\beta$. Dada la linealidad parcial envolucrada en el perdictor lineal, la distribucion inicial es usualmente especificada como una distribucion normal,
+En el contexto bayesiano, el `modelo` que describimos anteriormente se complementa con la distribucion sobre nuestro nivel de creencia entorno a los valores plausibles de $\beta$, i.e. la distribucion inicial sobre $\beta$. Dada la linealidad parcial envolucrada en el perdictor lineal, la distribucion inicial es usualmente especificada como una distribucion normal $p$-variada,
 $$
-\pi(\beta) = N(\beta|m_0,S_0),
+\pi(\beta) = N_p(\beta|m_0,S_0),
 $$
-donde $m_0$ es el vector inicial esperado de los coeficientes de regresion, mientras que S_0$ denota la covariabvilidad de tales coeficientes.
+donde 
 
-Empiricamente, es comun especificar $m_0$ y $S_0$ de manera *empirica* (i.e. empleando la informacion de los datos a traves de procedimientos basados en **empirical bayes**, empleando la media y dispersion empírica), o de manera **difusa**, de la siguiente forma
+* $m_0$ es el vector inicial esperado de los coeficientes de regresion, y
+
+* S_0$ denota la covariabilidad de tales coeficientes.
+
+En la practica, es comun especificar $m_0$ y $S_0$ de dos formas:
+
+a. manera *empirica* (i.e. empleando la informacion de los datos a traves de procedimientos basados en **empirical bayes**, empleando la media y dispersion empírica), o 
+
+b. manera **difusa**, de la siguiente forma:
 
 ```{r}
 beta0 <- rep(0,7)
@@ -118,38 +142,40 @@ Pbeta0 <- 0.25*diag(7)
 Pbeta0
 ```
 
-### MCMC
+### Algoritmo MCMC
 
-La distribución final o posterior para el modelo anterio no puede obtenerse de manera analitica cerrada. *Esto es porque el modelo no es conjugado para los parametros, ademas de ser no lineal de manera estructural integrada.*
+La distribución final o posterior para el modelo anterior no puede obtenerse de manera analitica cerrada. *Esto es porque el modelo no es conjugado para los parametros, ademas de ser no lineal de manera estructural integrada.*
 
-Inferencia, al igual que el caso frecuentista, descansa en la implementacion de metodos numericos. En particular, metodos *Markov Chain Monte Carlo* (MCMC). Ilustramos la implementacion de estos metodos con el algoritmo *Gibbs sampler*, en el cual se simula una sucesion de parametros y variables latentes simuladas,
+La inferencia, al igual que el caso frecuentista, descansa en la implementacion de metodos numericos. En particular, algoritmos *Markov Chain Monte Carlo* (MCMC). 
+
+Ilustramos la implementacion de estos metodos con el algoritmo *Gibbs sampler*, en el cual se simula una sucesion de parametros y variables latentes simuladas,
 $$
 \left\{\beta^{(m)},(z_i^{(m)})_{i=1}^n\right\}_{m\geq 1},
 $$
 la cual tiene como distribucion invariante la distribucion final del modelo,
 $$
-\pi\left(\beta,(z_i)_{i=1}^n|datos\righ) \propto \left\{\prod_{i=1}^{n} Ber\left(y_i|\theta=Pr(z_i > 0)\right)N(z_i|\beta'w_i,1) \right\} N(\beta|m_0,S_0).
+\pi\left(\beta,(z_i)_{i=1}^n|datos\right) \propto \left\{\prod_{i=1}^{n} Ber\left(y_i|\theta=Pr(z_i > 0)\right)N(z_i|\beta'w_i,1) \right\} N(\beta|m_0,S_0).
 $$
 El procedimiento opera como un procedimiento iterativo, fijando:
 
-* Valores inicial de la cadena de Markov
+* Valores inicial de la cadena de Markov, en este caso `beta` y `z`
 
-* Numero de iteraciones del MCMC.
+* Numero de iteraciones del MCMC, en este caso `G<-1000`.
 
 ```{r}
-beta <- rep(0,7)	# Valor inicial de la cadena de Markov
-n <- nrow(dde)		# Numero de observaciones/individuos
-z <- rep(0,n)		# Valores iniciales de las variables latentes
-G <- 1000		# Numero de iteraciones del MCMC
+beta <- rep(0,7)
+n <- nrow(dde)
+z <- rep(0,n)
+G <- 5000
 ```
 
 Asi, para las iteraciones $m=1,\ldots,M$, se sigue
 $$
-\beta^{(m)}|(z_i^{(m-1)})_{i=1}^n, datos \sim \pi\left(\beta|(z^{(m-1)}_i)_{i=1}^n|datos\righ),
+\beta^{(m)}|(z_i^{(m-1)})_{i=1}^n,\text{datos} \sim \pi\left(\beta|(z^{(m-1)}_i)_{i=1}^n,\text{datos}\right),
 $$
 y 
 $$
-(z_i^{(m)})_{i=1}^n |\beta^{(m)}, datos \sim \pi\left((z^_i)_{i=1}^n|\beta^{(m)},datos\righ).
+(z_i^{(m)})_{i=1}^n |\beta^{(m)}, \text{datos} \sim \pi\left((z^_i)_{i=1}^n|\beta^{(m)},\text{datos}\right).
 $$
 
 ```{r}
@@ -186,26 +212,29 @@ plot(beta_out[,1],type="l",xlab="iteration",
 plot(beta_out[,2],type="l",xlab="iteration",ylab="slope (beta_2)")
 ```
 
-### Distribucion final marginal para el coeficiente de pendiente de `DDE`
+
+**Distribucion final marginal para el coeficiente de pendiente de** `DDE`
 
 ```{r}
 slp <- beta_out[101:1000,2]
 par(mfrow=c(1,1))
 par(mar=c(5,5,5,5))
-plot(density(slp),type="l",xlab="DDE slope (beta_1)",ylab="Posterior Density",
-     cex=1.2)
-#abline(v=mean(slp))
-#abline(v=0.17536139,lwd=2.5) # MLE
-#abline(v=0.17536139 + 1.96*0.02909*c(-1,1),lwd=2.5,lty=2)
-#abline(v=quantile(slp,probs=c(0.025,0.975)),lty=2)
+plot(density(slp),type="l",xlab="Coeficiente para DDE (beta_1)",ylab="Densidad final",
+     cex=1.2, main="")
+abline(v=mean(slp))
+abline(v=0.17536139,lwd=2.5) # MLE
+abline(v=0.17536139 + 1.96*0.02909*c(-1,1),lwd=2.5,lty=2)
+abline(v=quantile(slp,probs=c(0.025,0.975)),lty=2)
 ```
 
-### Curva de respuesta a dosis `DDE` para nacimiento prematuro
+## Resultados
+
+**Curva de respuesta a dosis** `DDE` **para nacimiento prematuro.**
 
 ```{r}
 par(mfrow=c(1,1))
 par(mar=c(5,5,5,5))
-xg<- seq(-2,2,length=100)  	# Grid
+xg<- seq(-2,2,length=100)
 beta<- beta_out[101:1000,] 	# Datos sin periodo de calentamiento
 post<- matrix(0,100,4)
 for(i in 1:100){
@@ -214,14 +243,14 @@ for(i in 1:100){
   post[i,4]<- pnorm(-1.08068 + xg[i]*0.17536139)
 }
 xtrue<- xg*sqrt(var(dde$x)) + mean(dde$x)
-plot(xtrue,post[,1],xlab="Serum DDE (mg/L)",ylab="Pr(Preterm birth)",cex=1.2,
+plot(xtrue,post[,1],xlab="Dosis DDE (mg/L)",ylab="Pr(Nacimiento prematuro)",cex=1.2,
      ylim=c(0,max(post)), type="l")
 lines(xtrue,post[,2],lty=2)
 lines(xtrue,post[,3],lty=2)
 lines(xtrue,post[,4],lwd=2.5)
 ```
 
-### Resumen de la distrinbucion final de los coeficientes de regresion
+**Resumen de la distrinbucion final de los coeficientes de regresion**
 
 ```{r}
 table1<- matrix(0,7,5)
@@ -229,18 +258,29 @@ for(i in 1:7){
   table1[i,]<- c(mean(beta[,i]),median(beta[,i]),sqrt(var(beta[,i])),
                  quantile(beta[,i],probs=c(0.025,0.975)))
 }
-table1<- round(table1*100)/100
+table1 <- round(table1*100)/100
+table1 <- as.data.frame(table1)
+colnames(table1) <- c("Mean", "Median", "s.d.","q1","q2")
+table1
 ```
 
-#		Stochastic search variable selection via the Gibbs sampler
+#	Seleccion estocastica de variables  {.tabset .tabset-fade .tabset-pills} 
+
+## Especificacion inicial
+
+
+Recordemos, del `analisis frecuentista` con el `modelo saturado` que el estimador maximo verosimil es:
 
 ```{r}
-ddemle<- glm(Y ~ -1+X, family=binomial("probit"))
-betamle<- ddemle$coef 		#	MLE
+ddemle <- glm(Y ~ -1+X, family=binomial("probit"))
+betamle <- ddemle$coef
+betamle
 ```
 
+Recordemos que el modelo no incluye ordenada al origen, asi `X1` corresponde a la variable `DDE`.
 
-**Especificacion inicial**
+
+## Alternativas 
 
 En el caso de seleccion de variables, se sigue que que algunas variables explicativas pueden ser excluidas debido a:
 
@@ -252,36 +292,61 @@ Inspeccionar las combianciones de estos dos escenarios puede ser altamente deman
 
 Los **metodos de regularizacion** como `ridge` y `lasso` permiten resolver este problema.
 
+
+## Metodo automatizado estocastico
+
 Alternativamente, desde el punto de vista bayesiano, este problema puede resolverse explicitamente estableciendo un **metodo automatizado de seleccion de variables** (SSVS). Este procedimiento adopta una distribución inicial de la siguiente forma,
 $$
 \pi(\beta) = \prod_{j=1}^{p}\pi(\beta_j),
 $$
 donde 
+
 $$
 \pi(\beta_j)= \alpha \delta_{\{0\}}(\beta_j)+(1-\alpha)N(\beta_j|m_{j0},s_{j0}),
 $$
-incluyendo el parametro $0 < \alpha < 1$ como la probabilidad de que $\beta_j=0$ (i.e. la variable $x_j$ es irrelevante para el modelo y los datos).
 
-En el siguiente script se extiendo el Gibbs sampler del procedimiento estandar con la implementacion del procedimiento SSVS.
+incluyendo el parametro $0 < \alpha < 1$ como la probabilidad de que $\beta_j=0$ (i.e., en este caso,la variable $x_j$ es irrelevante para el modelo y los datos).
+
+En el siguiente script se extiende el *Gibbs sampler* del procedimiento estandar con la implementacion del procedimiento SSVS.
+
+Los valores iniciales son:
+
+* `p` es el numero de covariables incluidas en el `modelo saturado`
+
+* `p0` - Probabilidad inicial para los predictores excluidos en cada dimension (en este caso `p0=0.5` inica que es igualmente probabile que cada dimension/covariable sea incluido en el modelo o no)
+
+* el vector `b0` es un vector de identificacion de covariables incluidas
+
+* la variable `s0` corresponde a la varianza del componente latente.
 
 ```{r}
-p <- ncol(X)        	# Numero de covariables (predictores)
-p0 <- rep(0.5,p)    	# Distribucion inicial para los predictores excluidos
-b0 <- rep(0,p)      	# Hiperparametro para el predictor seleccionado
-s0 <- rep(2,p)      	# Varianza del componente normal latente
+p <- ncol(X)
+p
+p0 <- rep(0.5,p)
+b0 <- rep(0,p)
+s0 <- rep(2,p)
 ```
 
-**Stochastic search variable selection via data-augmentation**
+## Implementacion MCMC
+
+Al igual que el modelo estatico, consideramos los siguientes `valores iniciales` de la cadena `MCMC`:
+
+* $\beta^{(0)}$ se fija como el EMV de $\beta$, en este caso `betamle`
+
+* $(z^{(0)}_i)_{i=1}^{n}$ se fija en $z=0$
+
+* el numero de iteraciones de la cadena `MCMC` es `G<-5000`.
 
 ```{r}
 beta <- betamle
-n <- nrow(dde)   	# Numero de individuos
-z <- rep(0,n)    	# Valores iniciales de variables latentes
-G <- 5000        	# Numero de iteraciones MCMC
+n <- nrow(dde)
+z <- rep(0,n)
+G <- 5000
 ```
 
-**Stochastic search Gibbs sampler**
+### *Gibbs sampler*
 
+El algoritmo se implementa iterativamente en la siguiente `script`.
 
 ```{r}
 gt <- 1
@@ -301,22 +366,28 @@ for(gt in 1:G){
     Vj<- 1/(s0[j]^{-2} + sum(X[,j]^2))
     Ej<- Vj*sum(X[,j]*(z-X[,-j]%*%beta[-j]))
     
-	#	Probabilidad condicional de incluir el predictor 'j'
+	  #	Probabilidad condicional de incluir el predictor 'j'
     phat<- 1/(1 + p0[j]/(1-p0[j]) * dnorm(0,Ej,sqrt(Vj))/dnorm(0,b0[j],s0[j]) )          
     m<- rbinom(1,1,phat)
     beta[j]<- m*rnorm(1,Ej,sqrt(Vj))
   }
   
   #	Output
-  write(t(beta),file='est46114_s17_beta_ss.out', ncol=7, append=T)
+  write(t(beta),file='est46114_s16_beta_ss.out', ncol=7, append=T)
   #print(c(gt,round(beta*100)/100))
 }
 ```
 
-**Trace-plots para beta[1] y beta[2]**
+### Monitoreo
+
+
+Las graficas de trayectorias las monitoreamos de la siguiente forma:
 
 ```{r}
-beta<- matrix(scan('est46114_s17_beta_ss.out'), ncol=7, byrow=T)
+beta <- matrix(scan('est46114_s16_beta_ss.out'), ncol=7, byrow=T)
+dim(beta)
+hist(beta[,1])
+hist(beta[,2])
 ```
 
 En general, hay $2^p$ numero de posibles modelos. Y en nuestro caso particular, estos son $2^p = 2^7 = 128$.
@@ -326,20 +397,22 @@ En general, hay $2^p$ numero de posibles modelos. Y en nuestro caso particular, 
 
 ```{r}
 par(mfrow=c(3,2))
-ylb=c("intercept","dde","z1","z2","z3","z4","z5")
+ylb=c("intercept","dde","w1","w2","w3","w4","w5")
 for(j in 2:7){
-  print(j)
+  #print(j)
   plot(beta[,j],xlab="iteration",ylab=ylb[j])
 }
 ```
 
-**Grafica de la curva de respuesta a DDE para nacimiento prematuro**
+## Resultados
+
+La grafica de la curva de respuesta a DDE para nacimiento prematuro es ahora:
 
 ```{r}
 par(mfrow=c(1,1))
 par(mar=c(5,5,5,5))
 xg<- seq(-2,2,length=100)  	# Grid
-beta<- beta[1001:nrow(beta),] 	# Periodo de calentamiento
+beta<- beta[1001:nrow(beta),] 	# Excluyendo el periodo de calentamiento
 post<- matrix(0,100,4)
 for(i in 1:100){
   post[i,1]<- mean(pnorm(beta[,1] + xg[i]*beta[,2]))
@@ -347,26 +420,28 @@ for(i in 1:100){
   post[i,4]<- pnorm(-1.08068 + xg[i]*0.17536139)
 }
 xtrue<- xg*sqrt(var(dde$x)) + mean(dde$x)
-plot(xtrue,post[,1],xlab="Serum DDE (mg/L)",ylab="Pr(Preterm birth)",cex=1.2,
+plot(xtrue,post[,1],xlab="Dosis DDE (mg/L)",ylab="Pr(Nacimiento prematuro)",cex=1.2,
      ylim=c(0,max(post)), type="l")
 lines(xtrue,post[,2],lty=2)
 lines(xtrue,post[,3],lty=2)
 lines(xtrue,post[,4],lwd=2.5)
 ```
 
-Resumen de coeficientes de regresion
+### Resumen
 
-Incluye:
+La tabla resumen de los coeficientes de regresion incluye:
 
-- media posterior
+* media posterior
 
-- mediana
+* mediana
 
-- desviacion estandar
+* desviacion estandar
 
-- 95% intervalo de confianza
+* 95% intervalo de confianza
 
-- Pr(beta_j=0|datos)
+* Pr(beta_j=0|datos)
+
+Esta informacion se almacena en el archivo `est46114_s16_beta_ss_summary.csv`.
 
 ```{r}
 table1<- matrix(0,7,6)
@@ -376,15 +451,18 @@ for(i in 1:7){
 		 length(beta[beta[,i]==0,i])/nrow(beta))
 }
 table1<- round(table1*100)/100
-write(t(table1),file='est46114_s17_beta_ss_summary.csv',ncol=6)
+write(t(table1),file='est46114_s16_beta_ss_summary.csv',ncol=6)
+head(table1)
 ```
 
-**Probabilidades finales para los mejores modelos visitados por el algoritmo**
+### Probabilidades de los modelos
+
+Las probabilidades finales para los mejores modelos visitados por el algoritmo se 
 
 ```{r}
 Mout <- beta 
 Mout <- matrix(as.numeric(I(Mout==0)),nrow(Mout),ncol(Mout)) 
-Mindex <- Mout[1,] 		   # Different models sampled starting with first returns 1 if m1 and m2 are the same model
+Mindex <- Mout[1,] 	
 ind<- function(m1,m2){
   as.numeric(all(I(m1==m2)))
 }
@@ -393,10 +471,10 @@ Nm<- sum(Im)                       # Numero de muestral del primer modelo
 Mout<- Mout[Im==0,]
 repeat{
   if(length(Mout)==7) Mout<- matrix(Mout,1,7)
-  Mindex<- rbind(Mindex,Mout[1,])
-  Im<- apply(Mout,1,ind,m2=Mout[1,])
-  Nm<- c(Nm,sum(Im))
-  print(sum(Nm))
+  Mindex <- rbind(Mindex,Mout[1,])
+  Im <- apply(Mout,1,ind,m2=Mout[1,])
+  Nm <- c(Nm,sum(Im))
+  #print(sum(Nm))
   if(sum(Nm)==nrow(beta)){ 
     break
   } else Mout<- Mout[Im==0,]
@@ -407,5 +485,20 @@ ord <- order(Pm)
 Pm <- Pm[rev(ord)]
 Mindex <- Mindex[rev(ord),]
 table2 <- cbind(Pm,Mindex)
-write(t(table2),file='est46114_s17_beta_ss_pmodel.csv',ncol=8)
+write(t(table2),file='est46114_s16_beta_ss_pmodel.csv',ncol=8)
 ```
+
+#	Discusion  {.tabset .tabset-fade .tabset-pills} 
+
+
+## Comentarios
+
+* El modelo de seleccion estocastica automatizada de variables es util cuando deseamos hacer inferencia sobre los modelos contendientes en gran escala.
+
+* La implementacion MCMC hace uso de la `inclusion de variables latentes` (procedimiento usualmente referido como `data augmentation` [vinculo](http://cs231n.stanford.edu/reports/2017/pdfs/300.pdf)).
+
+## Lecturas complementarias
+
+* George, *Bayesian Stochastic Search Variable Selection*. [Vinculo](http://www-stat.wharton.upenn.edu/~edgeorge/Research_papers/fastN96.pdf)
+
+* van Dyk and Meng, *The art of Data Augmentation*. [Vinculo](http://www.stat.harvard.edu/Faculty_Content/meng/JCGS01.pdf). 
