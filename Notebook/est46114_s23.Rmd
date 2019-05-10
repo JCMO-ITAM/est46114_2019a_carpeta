@@ -1,0 +1,313 @@
+---
+title: "Sesion 23 - Datos Categoricos y Modelos de Grafos Probabilisticos Parte 6/"
+author:
+-  Juan Carlos Martínez-Ovando
+-  Maestría en Ciencia de Datos
+date: "Primavera 2019"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 2
+    number_sections: yes
+    self_contained: yes
+    theme: cerulean
+    highlight: textmate
+fig_align: "center"
+fig_width: 18
+---
+
+\newcommand{\BigCI}{\mathrel{\text{$\perp\mkern-10mu\perp$}}}
+
+# Objetivos
+
+En esta sesion:
+
+* Estudiaremos definciones, propiedades y extensiones de los **modelos de grafos probabilisticos dirigidos** para datos categoricos.
+
+* Estudiaremos definiciones y propiedades inferencias de los **modelos de grafos triangulados**.
+
+* Implementaremos las soluciones con las librerias `gRbase` y `gRim`:
+
+```
+if(!requireNamespace("BiocManager", quietly = TRUE)){install.packages("BiocManager")}
+BiocManager::install("graph", version = "3.8")
+BiocManager::install("RBGL", version = "3.8")
+BiocManager::install("Rgraphviz", version = "3.8")
+
+install.packages("gRbase", dependencies=TRUE)
+install.packages("gRim", dependencies=TRUE)
+```
+
+```{r preliminar, include=FALSE}
+suppressMessages(library("gRbase"))
+suppressMessages(library("graph"))
+suppressMessages(library("RBGL"))
+suppressMessages(library("Rgraphviz"))
+```
+
+
+# Modelo de grafo dirigido
+
+> **Definicion:-** Un `grafo dirigido` es in grafo $\mathcal{G}=(V,E)$ en el que $E$ esta definido por `bordes dirigidos` (a.k.a. `fechas conectoras entre vertices`).
+
+Los `grafos dirigidos` se denotan, por sus siglas en ingles, como `DG`.
+
+> **Definicion:-** En adicion, un `DG` es `aciclico` si no tiene `ciclos` dirigidos (i.e. `trayectorias ciclicas` con flechas apuntando en la misma direccion hasta cerrar la `trayectoria` en un `vectice` dado).
+
+Los `DG` `aciclicos` se denotan por `DAG`, por sus siglas en incles.
+
+## Ejemplo
+
+Consideramos un ejemplo con `5` `nodos/vertices` y la siguiente conectividad:
+```{r}
+library("gRbase")
+dag0 <- dag(~1, ~2*1, ~3*1*2, ~4*3*5, ~5*1)
+dag0
+plot(dag0)
+```
+
+Noten que al especificar los `bordes` en la funcion `dag()`, el orden de mencion no es simetrico.
+
+
+Vemos un ejemplo donde cambiamos la direccion de dos nodos:
+$$
+\{2,1\} \text{ y } \{5,1\},
+$$
+por
+$$
+\{1,2\} \text{ y } \{1,5\}.
+$$
+
+```{r}
+dag1 <- dag(~1, ~1*2,  ~3:1:2, ~4:3:5, ~1:5)
+dag1
+plot(dag1)
+```
+
+> Revisen otras formas de expecificar los `bordes` en `dag()`.
+
+La creacion de los `DAG`s puede hacerse a partir de la especificacion de `matrices de conectividad` (ala `matrices de adyacencia` no simetricas):
+
+```{r}
+m <- matrix(c(0, 0, 0, 0, 0, 
+              1, 0, 0, 0, 0, 
+              0, 1, 0, 0, 0, 
+              0, 1, 0, 0, 0, 
+              0, 0, 1, 1, 0), 
+            nrow = 5)
+dagm <- as(m, "graphNEL")
+dagm
+plot(dagm)
+```
+
+## Ascendentes y descendentes en DAG
+
+La nocion de `parents` y `children` es relevante en los DAGs. 
+
+> **Definicion:-** Para un `vertice` $\beta\in V$, se define el conjunto `parents` de $\beta$, $Par_\beta$, como el conjunto de `nodos/vertices` $\alpha_i\in V$ tales que $$\alpha_i\rightarrow \beta.$$
+
+> **Definicion:-** Para un `vertice` $\beta\in V$, se define el cnjunto `children` de $\beta$, $Chi_\beta$, como el conjunto de `nodos/vertices` $\gamma_i\in V$ tales que $$\beta \rightarrow \gamma_i.$$
+
+Por ejemplo, respecto al DAG `dagm` anteriores:
+
+```{r}
+parents("4", dagm)
+```
+
+```{r}
+children("4", dagm)
+```
+
+## Factorizacion de DAG
+
+Un `grafo probabilistico` con soporte discreto $$X=(X_v)_{v\in V},$$ con $V$ asociada con un `DAG` $$\mathcal{G}=(V,E),$$
+y `masas de probabilidad` $p(x_v)$ puede factorizarse como
+$$
+p(x_v)=\prod_{v\in V} p_{X_v|X_{Par_{v}}}(x_v|x_{Par_v}).
+$$
+
+Retomemos el ejemplo del `dag0`:
+
+```{r}
+plot(dag0)
+```
+
+En este caso, la factorizacion de $p(\cdot)$ para $$X=(X_1,X_2,X_3,X_4,X_5),$$ se define como
+$$
+p(x)=p_1(x_1)p(2|1)(x_2|x_1)p_{3|1,2}(x_3|x_1,x_2)p_{4|3,5}(x_4|x_3,x_5)p_{5|1}(x_5|x_1).
+$$
+
+> El teorema de factorizacion de `DAG`s se refiere en alguna literatura como el `Teorema de Hammersley-Clifford`.
+
+## Comentarios
+
+> Los `DAG`s estan relacionados con `factorizacion por independencia condicional`, pero no son estrictamente relacionados, porque `nociones de independencia condicional` puede seguir siendo `simetricas en probabilidad`, mientras que `DAG`s tal simetria no se cumple.
+
+Consideremos los siguientes tres ejemplos:
+
+```{r}
+par(mfrow=c(3,1),mar=c(3,1,2,1))
+plot(dag(~1+2:1+3:2),"circo")
+plot(dag(~3+2:3+1:2),"circo")
+plot(dag(~2+1:2+3:2),"circo")
+```
+
+En estos ejemplos se sigue que 
+$$
+X_1 \BigCI X_3 | X_2.
+$$
+
+> Revisen que se cumple la `propiedad de factorizacion` entre $\{X_1,X_2\}$ y $\{X_2,X_3\}$.
+
+Sin embargo, en el siguiente caso `DAG`,
+
+```{r}
+plot(dag(~1+3+2:1:3),"circo")
+```
+
+se cumple que 
+$$
+p(x)=p_1(x_1)p_3(x_3)p_{2|1,3}(x_2|x_1,x_3),
+$$
+donde se sigue que
+$$
+p_{1,2}(x_1,x_2)=p_1(x_1)p_2(x_2),
+$$
+por lo que 
+$$
+X_1 \BigCI X_2,
+$$
+aunque el `teorema de factorizacion` no cumpla, como en los casos anteriores.
+
+Los pasos importantes en la defincion, estudio y uso de los `DAG` son:
+
+1. Identificar los `bordes` entre los `parents` de cada `nodo`,
+  
+2. Reemplaza todos los `bordes dirigidos` por los `no dirigidos`, devolviendo así un `grafo no dirigido`.
+
+Veamos este ejemplo:
+
+```{r}
+dag0m <- moralize(dag0)
+par(mfrow=c(1,2))
+plot(dag0)
+plot(dag0m)
+```
+
+En este caso, siguiendo otra notacion simplificada usada en la literatura, notamos que,
+$$
+\begin{eqnarray}
+p(V) & = & p(1)p(2|1)p(3|1,2)p(4|3,5)p(5|1)\\
+& = & \phi(3,1,2)\phi(5,1)\phi(2,3,5)\\
+& = & \phi(3,1,2) \phi(3,5,1) \phi(4,3,5).
+\end{eqnarray}
+$$
+
+> La factorizacion inducida por `DAG` es analoga a la que se obtiene por la `moralizacion` de `DAG`, como se muestra en el resultado anterior.
+
+
+# Redes bayesianas
+
+> **Defincion:-** Una `red bayesiana` (`BN`, por sus siglas en ingles) es un `grafo probabilistico` basado en un `DAG`.
+
+> Un `BN` satisface condiciones de `independencia condicional` en subgrafos contenidos en `BN`.
+
+## Ejemplo
+
+Consideremos un ejemplo en el que se conectan tres dimensiones con base en las siguientes `premisas`:
+
+> Tener gripe ($G$) puede causar una temperatura elevada ($F$). La temperatura elevada puede causar un dolor de cabeza ($D$).
+
+La representacion del `grafo` asociado con estas `premisas` es
+
+```{r}
+gp.GFD <-dag(~ G + F:G + D:F)
+plot(gp.GFD, "circo")
+```
+
+Definmos el conjunto de `vertices` como
+$$
+V=\{G,F,D\},
+$$
+con el `vector aleatorio`,
+$$
+X=(X_v)_{v\in V}=(X_G,X_F,X_D),
+$$
+donde $$\mathcal{X}_v = \{1,2\},$$
+con $$X_v=\begin{cases}1, &\text{ no }v,\\2, &\text{ s }v,\end{cases}$$
+para $v\in V$.
+
+La regla de probabilidad asociada con $E$ es
+$$
+\begin{eqnarray}
+p(x) & = & p(x_G) p(x_F|x_G) p(x_D|x_F) \\
+& = & p(G)p(F|G)p(D|F).
+\end{eqnarray}
+$$
+
+### Casos
+
+* Es facil verificar que $D$ (dolor de cabeza) es condicionalmente independiente de $G$ (gripe), condicional en $F$ (fiebre), i.e.
+$$
+(X_G \BigCI X_D) | X_F,
+$$
+o, analogamente,
+$$
+(G \BigCI D) | F.
+$$
+
+### Aprendizaje
+
+Dado que hemos encontrado que un paciente tiene $D$ (dolor de cabeza), i.e.
+$$
+X_{D,1}=2,
+$$
+podemos calcular/actualizar las probabilidades condicionales para $X_{G,1}$ y $X_{F,1}$ dado $X_{D,1}=2$.
+
+### Componentes inciales
+
+Antes de observar `evidencia`, necesitamos definir `probabilidades iniciales` con base en la descomposicion que vimos anteriormente:
+
+```{r}
+p.G <- parray("G", levels=2, values=c(.99,.01))
+(p.G)
+
+p.FgG <- parray(c("F","G"), levels=c(2,2), values=c(.05,.95, .999,.001))
+(p.FgG)
+
+p.DgF <- parray(c("D","F"), levels=c(2,2), values=c(.20,.80, .99,.01))
+(p.DgF)
+```
+
+La representacion de la `tabla de contendencia` $G\times F\times D$, en terminos de las `probabilidades iniciales` asociadas con el `grafo de probabilidad`, son
+```{r}
+p.GF <- tableMult(p.G, p.FgG)
+p.DFD <- tableMult(p.GF, p.DgF)
+p.DFD
+```
+
+Estas `probabilidades conjuntas`, pueden escribirse como un `data.frame`
+```{r}
+p.DFD.df <- as.data.frame.table(p.DFD)
+colnames(p.DFD.df) <- c("G","F","D","p_v")
+p.DFD.df
+```
+
+## Comentarios
+
+> Las probabilidades actualizadas por la `observacion/configuracion` $X_{D,1}=2$, son generalmente dificiles de calcular directamente. Mas aun, cuando deseamos calcular la `actualizacion` con un conjunto `grande` de `datos/configuraciones` observadas.
+
+> **Invitacion:-** Les invito a realizar la actualizacion anterior.
+
+> **Comentario:-** Las actualizacion tendran `calculo facil` si representamos el modelo como un `grafo triangulado`.
+
+
+## Siguiente sesion
+
+* Estudio/uso de `algoritmos bayesianos predictivos automaticos`.
+
+* Estudio de `modelos de grafos causales`.
+
+
+

@@ -1,0 +1,118 @@
+\documentclass[10pt]{exam}
+
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage[margin=.75in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{multicol}
+\usepackage{graphicx}
+\usepackage{tikz}
+
+% Configuración del Encabezado
+\newcommand{\class}{EST-46114 M\'et. Mult. y Dat. Categ.}
+\newcommand{\term}{Primavera 2019}
+\newcommand{\examnum}{Trabajo Final}
+\newcommand{\examdate}{Fecha: 6-May-19}
+\newcommand{\timelimit}{Entrega: 23-May-19}
+\pagestyle{head}
+\firstpageheader{ITAM}{}{Maestr\'ia en Ciencia de Datos}
+\runningheader{\class}{\examnum\ - P\'ag. \thepage/\numpages}{\examdate}
+\runningheadrule
+
+% Configuración de la tabla de calificación
+\pointpoints{punto}{puntos}
+\hpword{Puntos:}
+\vpword{Puntos}
+\vtword{Total:}
+\htword{Total}
+\vsword{Resultado}
+\hsword{Resultado:}
+\vqword{Problema}
+\hqword{Pregunta:}
+
+\begin{document}
+% Definición del Encabezado
+\noindent
+\begin{tabular*}{\textwidth}{l @{\extracolsep{\fill}} r @{\extracolsep{6pt}} l}
+\textbf{\class} & \textbf{Equipo:} & \makebox[2.5in]{\hrulefill}\\
+\textbf{\term} &  & \\
+\textbf{\examnum} & \textcolor{blue}{\textbf{Calificaci\'on:}} & \makebox[2.5in]{\hrulefill}\\
+\textbf{\examdate} & \textbf{\textbf{\timelimit}}  & 
+\end{tabular*}\\
+\rule[2ex]{\textwidth}{2pt}
+
+% Bloque de instrucciones
+
+\noindent
+\begin{itemize}
+\item  Los {\tt 6} equipos para el trabajo final están integrados en la lista {\tt est46114\_2019a\_equipos\_tf.pdf}.
+
+\item Cada equipo responder\'a las cuestiones del trabajo final de acuerdo a la tabla listada m\'as adelante.
+
+\item Cada equipo preparar\'a una presentaci\'on ejecutiva con sus respuestas con duraci\'on m\'axima de 12 minutos (les recomiendo consideren una lamina de presentacion por cada 2-3 minutos). La presentaci\'on se realizar\'a en la fecha, hora y sal\'on asignado para el examen final.
+
+\item Junto con la presentaci\'on, los equipos entregaran un {\tt reporte ejecutivo} con los resultados de su analisis, de no m\'as de 15 cuartillas. El \c'odigo para replicar los resultados lo deber\'an entregar como un documento anexo.
+ 
+\item Todos los equipos trabajar\a'n con los datos:
+\begin{itemize}
+\item {\tt us-pres-state-polling-2004-2016-extra.rds}, 
+\item {\tt us-pres-state-polling-2004-2016},
+\item {\tt us-pres-state-voting-2004-2016},
+\end{itemize}
+que acompa\~nan al articulo de Bon {\it et al} (2018).
+\end{itemize}
+
+\noindent
+Referencia: Bon, Ballard, Baffour (2018). "Polling bias and undecided voter allocations: US Presidential elections, 2004 - 2016". {\it Journal of the Royal Statistical Society (Series A)}.
+%\vspace{0.5cm}
+
+\noindent
+\rule[2ex]{\textwidth}{1pt}
+
+\begin{center}
+Actividades
+\end{center}
+\begin{questions}
+\question 
+\end{questions}
+
+\newpage
+\noindent
+\rule[2ex]{\textwidth}{1pt}
+\begin{center}
+Tabla de asignaci\'on de tareas
+
+\begin{tabular}{| l | c | c | c | c | c | c |}
+\hline
+Equipo & Entrenamiento & Prueba & $L_T$ & $L_B$ & $L_C$ & $L_P$ \\
+\hline
+\hline
+1 & 1980-1988 & 1989-1990 & 25 & -- & 10 & 15 \\
+2 & 1980-1987 & 1988-1989 & 26 & 15 & 10 & -- \\
+3 & 1980-1987 & 1989-1990 & 24 & 13 & -- & -- \\
+4 & 1980-1985 & 1986-1987 & 23 & 12 & -- & 20 \\
+5 & 1980-1983 & 1985-1986 & 22 & -- & -- & 13 \\
+6 & 1980-1988 & 1989-1990 & 21 & 13 & -- & -- \\
+\hline
+\end{tabular}
+\end{center}
+
+\rule[2ex]{\textwidth}{1pt}
+\begin{center}
+Contenido del documento ejecutivo
+\end{center}
+
+\begin{itemize}
+\item Introducci\'on
+\item Descripci\'on de los modelos y relevancia para los datos.
+\item Descripci\'on del procedimiento de estimaci\'on, con justificaci\'on.
+\item Descripci\'on del m\'etodo de agregaci\'on, con justificaci\'on.
+\item Resultdados con disci\'on.
+\item Comentarios finales
+\item Bibliografia (citando no m\'as de 5 referencias).
+\end{itemize}
+
+\noindent
+Todas las partes del documento ejecutivo, como la presentaci\'on de resultados finales, ser\a'm consideradas en la evaluaci\'on.
+
+\end{document}
