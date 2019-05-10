@@ -1,0 +1,455 @@
+---
+title: "Sesion 24 - Datos Categoricos y Modelos de Grafos Probabilisticos Parte 7/"
+author:
+-  Juan Carlos Martínez-Ovando
+-  Maestría en Ciencia de Datos
+date: "Primavera 2019"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 2
+    number_sections: yes
+    self_contained: yes
+    theme: cerulean
+    highlight: textmate
+fig_align: "center"
+fig_width: 18
+---
+
+\newcommand{\BigCI}{\mathrel{\text{$\perp\mkern-10mu\perp$}}}
+
+# Objetivos
+
+En esta sesion:
+
+* Estudiaremos definciones, propiedades y extensiones de los **modelos de grafos probabilisticos dirigidos** para datos categoricos.
+
+* Estudiaremos definiciones y propiedades inferencias de los **modelos de grafos triangulados**.
+
+* Implementaremos las soluciones con las librerias `gRbase` y `gRim`:
+
+```
+if(!requireNamespace("BiocManager", quietly = TRUE)){install.packages("BiocManager")}
+BiocManager::install("graph", version = "3.8")
+BiocManager::install("RBGL", version = "3.8")
+BiocManager::install("Rgraphviz", version = "3.8")
+
+install.packages("gRbase", dependencies=TRUE)
+install.packages("gRim", dependencies=TRUE)
+```
+
+```{r preliminar, include=FALSE}
+suppressMessages(library("gRbase"))
+suppressMessages(library("graph"))
+suppressMessages(library("RBGL"))
+suppressMessages(library("Rgraphviz"))
+```
+
+
+
+```{r include=FALSE}
+library("gRbase")
+dag0 <- dag(~1, ~2*1, ~3*1*2, ~4*3*5, ~5*1)
+dag0
+plot(dag0)
+```
+
+```{r include=FALSE}
+dag1 <- dag(~1, ~1*2,  ~3:1:2, ~4:3:5, ~1:5)
+dag1
+plot(dag1)
+```
+
+
+```{r include=FALSE}
+m <- matrix(c(0, 0, 0, 0, 0, 
+              1, 0, 0, 0, 0, 
+              0, 1, 0, 0, 0, 
+              0, 1, 0, 0, 0, 
+              0, 0, 1, 1, 0), 
+            nrow = 5)
+dagm <- as(m, "graphNEL")
+dagm
+plot(dagm)
+```
+
+
+```{r include=FALSE}
+parents("4", dagm)
+```
+
+```{r include=FALSE}
+children("4", dagm)
+```
+
+```{r include=FALSE}
+par(mfrow=c(3,1),mar=c(3,1,2,1))
+plot(dag(~1+2:1+3:2),"circo")
+plot(dag(~3+2:3+1:2),"circo")
+plot(dag(~2+1:2+3:2),"circo")
+```
+
+
+```{r include=FALSE}
+dag0m <- moralize(dag0)
+par(mfrow=c(1,2))
+plot(dag0)
+plot(dag0m)
+```
+
+# Redes bayesianas
+
+> **Defincion:-** Una `red bayesiana` (`BN`, por sus siglas en ingles) es un `grafo probabilistico` basado en un `DAG`.
+
+> Un `BN` satisface condiciones de `independencia condicional` en subgrafos contenidos en `BN`.
+
+## Ejemplo
+
+Consideremos un ejemplo en el que se conectan tres dimensiones con base en las siguientes `premisas`:
+
+> Tener gripe ($G$) puede causar una temperatura elevada ($F$). La temperatura elevada puede causar un dolor de cabeza ($D$).
+
+La representacion del `grafo` asociado con estas `premisas` es
+
+```{r}
+gp.GFD <-dag(~ G + F:G + D:F)
+plot(gp.GFD, "circo")
+```
+
+Definmos el conjunto de `vertices` como
+$$
+V=\{G,F,D\},
+$$
+con el `vector aleatorio`,
+$$
+X=(X_v)_{v\in V}=(X_G,X_F,X_D),
+$$
+donde $$\mathcal{X}_v = \{1,2\},$$
+con $$X_v=\begin{cases}1, &\text{ no }v,\\2, &\text{ s }v,\end{cases}$$
+para $v\in V$.
+
+La regla de probabilidad asociada con $E$ es
+$$
+\begin{eqnarray}
+p(x) & = & p(x_G) p(x_F|x_G) p(x_D|x_F) \\
+& = & p(G)p(F|G)p(D|F).
+\end{eqnarray}
+$$
+
+### Casos
+
+* Es facil verificar que $D$ (dolor de cabeza) es condicionalmente independiente de $G$ (gripe), condicional en $F$ (fiebre), i.e.
+$$
+(X_G \BigCI X_D) | X_F,
+$$
+o, analogamente,
+$$
+(G \BigCI D) | F.
+$$
+
+### Aprendizaje
+
+Dado que hemos encontrado que un paciente tiene $D$ (dolor de cabeza), i.e.
+$$
+X_{D,1}=2,
+$$
+podemos calcular/actualizar las probabilidades condicionales para $X_{G,1}$ y $X_{F,1}$ dado $X_{D,1}=2$.
+
+### Componentes inciales
+
+Antes de observar `evidencia`, necesitamos definir `probabilidades iniciales` con base en la descomposicion que vimos anteriormente:
+
+```{r}
+p.G <- parray("G", levels=2, values=c(.99,.01))
+(p.G)
+
+p.FgG <- parray(c("F","G"), levels=c(2,2), values=c(.05,.95, .999,.001))
+(p.FgG)
+
+p.DgF <- parray(c("D","F"), levels=c(2,2), values=c(.20,.80, .99,.01))
+(p.DgF)
+```
+
+La representacion de la `tabla de contendencia` $G\times F\times D$, en terminos de las `probabilidades iniciales` asociadas con el `grafo de probabilidad`, son
+```{r}
+p.GF <- tableMult(p.G, p.FgG)
+p.DFD <- tableMult(p.GF, p.DgF)
+p.DFD
+```
+
+Estas `probabilidades conjuntas`, pueden escribirse como un `data.frame`
+```{r}
+p.DFD.df <- as.data.frame.table(p.DFD)
+colnames(p.DFD.df) <- c("G","F","D","p_v")
+p.DFD.df
+```
+
+## Comentarios
+
+> Las probabilidades actualizadas por la `observacion/configuracion` $X_{D,1}=2$, son generalmente dificiles de calcular directamente. Mas aun, cuando deseamos calcular la `actualizacion` con un conjunto `grande` de `datos/configuraciones` observadas.
+
+> **Invitacion:-** Les invito a realizar la actualizacion anterior.
+
+> **Comentario:-** Las actualizacion tendran `calculo facil` si representamos el modelo como un `grafo triangulado`.
+
+# Triangulacion y tablas de contingencia
+
+## Definiciones
+
+> **Defincion:-** Un grafo es `triangular` (o `descomponible`) si no contiene ciclos de orden $n\geq 4$.
+
+Recordemos que los `ciclos` corresponden a las `trayectorias mas cortas` de regresar a un `nodo/vertice` dado. 
+
+La `longitud del ciclo` es el numero de `bordes` en la `trayectoria`.
+
+## Ejemplos
+
+*  `Grafo triangulado`
+
+```{r}
+gt <- ug(~1:2+2:3:4+3:4:5:6+6:7) 
+plot(gt, "circo")
+```
+
+* `Grafo no triangulado`
+
+```{r}
+gnt <- ug(~1:2:5+2:3:5+3:4:5+4:1:5)
+plot(gnt,"circo")
+```
+
+> **Defincion:-** Un `modelo loglinear jerarquico` con clase generadora $$\mathcal{C}_{G}=\{G_1,\ldots,G_Q\}$$ es `grafico` si los elementos generadores $G_j\in\mathcal{C}_G$ son `cliques` del `grafo dependiente`.
+
+> **Definicion:-** Un `modelo loglineal grafico` es `triangulado` si el `grafo dependiente` es `triangulado`.
+
+## Conexion c/ modelos loglineales
+
+El modelo `loglineal dependiente` con interacciones dadas por la clase generadora
+$$
+\mathcal{C}_1 = \{ \{1,2,3\}, \{2,3,4\} \}
+$$
+es `grafico`. Adicionalmente, es `triangular`.
+
+```{r}
+dg.g <- ug(~1:2:3 + 2:3:4)
+plot(dg.g)
+```
+
+Pero el modelo con la `clase generadora` 
+$$
+\mathcal{C}_2=\{ \{1,2\}, \{1,3\}, \{1,2,4\} \},
+$$
+no es `grafico`. 
+
+```{r}
+dg.ng <- ug(~1:2 + 1:3 + 2:3:4)
+plot(dg.ng)
+```
+
+Aunque ambos tienen los siguientes `cliques` asociados:
+$$
+\{ \{1,2,3\}, \{2,3,4\} \}.
+$$
+
+# Aprendizaje estadistico (frecuentista)
+
+> La idea de trabajar con `grafos triangulares` es la de  poder tener simplificaciones de las `masas de probabilidad` $p(x_v),$ de manera que `estimadores maximo verosimiles puntuales` sean faciles de obtener.
+
+## Ejemplo
+
+En el caso del `grafo triangulado` denotado por `gt` en el ejemplo anterior, definido a partir de 
+$$
+\mathcal{C}_1=\{ \{1,2,3\}, \{2,3,4\} \},
+$$
+tenemos que, para un conjunto de $n$ `configuraciones/datos observados`, el EMV puntual tiene la siguiente descomposicion,
+$$
+\hat{p}(x_{ijkl})=\hat{\theta}_{ijkl} = \frac{\hat{\theta}_{ijk\cdot}\hat{\theta}_{\cdot jkl}}{\hat{\theta}_{\cdot jk\cdot}} 
+$$
+con
+$i \in \mathcal{X}_i$, $j \in \mathcal{X}_j$, $k \in \mathcal{X}_k$ y $l \in \mathcal{X}_l$.
+
+Observaciones:
+
+* $\hat{\theta}_{ijk\cdot} = \frac{n_{ijk\cdot}}{n}$ es el EMV para $\theta_{ijk\cdot}$ para la `tabla de contingencia marginal` $\{1,2,3\}$.
+
+* $\hat{\theta}_{\cdot jkl} = \frac{n_{i\cdot jkl}}{n}$ es el EMV para $\theta_{\cdot jkl}$ para la `tabla de contingencia marginal` $\{2,3,4\}$.
+
+* $\hat{\theta}_{\cdot jk\cdot} = \frac{n_{\cdot jk\cdot}}{n}$ es el EMV para $\theta_{\cdot jk\cdot}$ para la `tabla de contingencia marginal` $\{2,3\}$.
+
+## Resultado
+
+Para un `modelo grafo triangulado`, se cumple la siguiente descomposicion:
+$$
+\hat{\theta}_{v} = \frac{\prod_{ \{C:\text{clique}\} }\hat{\theta}_{C}}{\prod_{ \{S:\text{sep}\} }\hat{\theta}_{S}},
+$$
+donde 
+$$
+\hat{\theta}_A = \frac{n_A}{n},
+$$
+para todo $A\subset V$ conjuntos `cliques` y `separadores`.
+
+# Ejemplo de sesiones previas
+
+```{r}
+g3 <- ug(~ 1:2 + 2:3:4 + 3:5 + 4:5 + 6)
+
+suppressMessages(library("gRbase"))
+data(lizardRAW, package="gRbase")
+
+data <- lizardRAW
+colnames(data) <- c("X2","X3","X1")
+data <- data[,c("X1","X2","X3")]
+data.tc <- table(data)
+data.prob <- table(data)/sum(table(data))
+```
+
+Retomemos el ejemplo de los `409` lagartos, considerando el modelo dado por la `clase generadora`
+$$
+\{ \{1,2\}, \{1,3\} \}.
+$$
+
+Es decir, el `modelo de grafo`
+```{r}
+dg.lagarto <- ug(~2:1 + 3:1)
+plot(dg.lagarto)
+```
+
+En este caso, tenemos las siguientes `tablas de contingencia marginales`:
+
+* Tabla de contingencia marginal para $\{1,2\}$ i.e. $\{X_1,X_2\}$
+
+```{r}
+n.21 <- tableMargin(data.tc, c("X2","X1"))
+n.21
+```
+
+* Tabla de contingencia marginal para $\{1,3\}$ i.e. $\{X_1,X_3\}$
+```{r}
+n.31 <- tableMargin(data.tc, c("X3","X1"))
+n.31
+```
+
+* Tabla de contingencia marginal para $\{1\}$ i.e. $\{X_1\}$
+```{r}
+n.1 <- tableMargin(data.tc, c("X1"))
+n.1
+```
+
+## Casos esperados
+
+La `tabla de contingencia` con `conteos esperados` celda-por-celda se calcula como
+```{r}
+e.v <- tableDiv( tableMult(n.21, n.31), n.1)
+e.v
+sum(e.v)
+```
+
+_versus_ la `tabla de contingencia muestral`,
+```{r}
+data.tc
+sum(data.tc)
+```
+
+> **Observacion:-** La `tabla de contingencia estimada` es util para producir `predicciones puntuales` celda-a-celda.
+
+## Prueba de indenpendencia
+
+Antes de realizar predicciones, es conveniente contrastar el modelo inducido por la `clase generadora` mencionada,
+$$
+\mathcal{C}_1=\{ \{1,2\}, \{1,3\}\}
+$$
+_versus_ el modelo con la `clase generadora saturado`
+$$
+\mathcal{C}_0=\{ \{1\}, \{2\}, \{3\}, \{1,2\}, \{1,3\}, \{2,3\}, \{1,2,3\} \}.
+$$
+
+> Es decir, `contrastar estadisticamente` si existen interacciones/comovimientos entre las dimensiones o no.
+
+> **Comentario:-** En caso de no existir comovimientos (a.k.a. `existir independencia`), las predicciones se realizarian mediante productos de `distribuciones multinomiales` dimension-a-dimension.
+
+La funcion `ciTest()` nos permite realizar la prueba de hipotesis correspondiente:
+```{r}
+suppressMessages(library("gRim"))
+ciTest(data.tc, set=c("X2","X3","X1"))
+```
+
+La prueba anterior sirve para `contrastar` la hipotesis:
+$$
+(X_2 \BigCI X_3) | X_1.
+$$
+
+> **Interpretacion:-** La prueba, grosso modo, se contruye como una prueba de independencia condicional en una `tabla de contingencia` de tres dimensiones, `$A \times B \times S$, dado $S$.
+
+> **Definicion:-** Asociada con la prueba anterior, el `estadistico de devianza` se calcula como 
+$$
+\begin{eqnarray}
+D(\mathcal{C}_1,\mathcal{C}_0) 
+  & = & 2 \sum_{ijk} n_{ijk} \log \frac{n_{ijk}}{m_{ijk}} \\ 
+  & = & \sum_{i} 2 \sum_{jk} n_{ijk} \log \frac{n_{ijk}}{\hat{m}_{ijk}} \\ 
+  & = & \sum_{i} D_i(\mathcal{C}_1,\mathcal{C}_0), \\ 
+\end{eqnarray}
+$$
+donde $D_k(\mathcal{C}_1,\mathcal{C}_0)$ denota la `devianza` de la `tabla de contingencia marginal` de $\{X_2,X_3\}$ condicional a cada configuracion $$X_1=i \in \mathcal{X}_1.$$
+
+En la ecuacion anterior:
+
+* Los valores $n_{ijk}$ corresponden a los `conteos esperados` del `modelo saturado`.
+
+* Los valores $m_{ijk}$ corresponden a los `conteos esperados` del `modelo por contrastar`.
+
+Recalculamos la prueba de hipotesis:
+
+```{r}
+ciTest.23d1 <- ciTest(data.tc, set=c("X2","X3","X1"))
+ciTest.23d1
+```
+
+El `estadistico de prueba` tiene distribucion asintotica $\chi_{\text{df}}$ con $\text{df}$ grados de libertad. Estos, en un contexto general, se definen como
+$$
+\text{df}_{1} = \left( \#\{j : n_{ij\cdot} > 0\} − 1\right) \times \left(\#\{k : n_{i\cdot k} > 0\} − 1\right),
+$$
+i.e. en nuestro ejemplo,
+$$\text{df}=2.$$
+
+### Devianzas marginales
+
+Las devianzas marginales para la `prueba de independencia` calculadas para cada configuracion de $$X_1=i,$$ se otienen de `ciTest()` de la siguiente forma:
+```{r}
+ciTest.23d1$slice
+```
+
+> Al abrir la tabla de contingencia en rebanadas en una dimension, abrimos la posibilidad de tener lecturas complementarias distintas al agredado.
+
+Por ejemplo, el cuantil $\chi_{\text{df}}$ al $95$ porciento se calcula como
+```{r}
+chi.95.df1 <- qchisq(.95, df=1)
+chi.95.df1
+chi.95.df2 <- qchisq(.95, df=2)
+chi.95.df2
+```
+
+Comparando estos `valores` con los `estadisticos de las devianzas marginales y agregadas` vemos que las `hipotesis de independencia condicional` no se rechazan.
+
+# Comentarios finales
+
+## Discusion
+
+* En la sesion de hoy estudiamos `definiciones` y `propiedades` que complementan la especificacion del `modelo de grafo probabilistico de dependencia` para una `tabla de contingencia` dada.
+
+* Con base en esto, estudiamos `factorizaciones trianguladas`, las cuales derivan en el calculo de EMV faciles de obtener celda-a-celda.
+
+* Con base en estos calculos, definimos un procedimiento para `contrastar hipotesis de dependencia` de manera `marginal` bajo el enfoque frecuentista.
+
+* El `grafo probabilisitico` con la `estructura de dependencia` adecuado (a.k.a. `clase generadora adecuada`) sera empleado para producir `predicciones`.
+
+* El material que vimos hoy, complementa la vision marginal de la `solucion bayesiana automatizada` por el algoritmo MC3 que revisamos en la `sesion 24`.
+
+## Siguiente sesion
+
+* Estudio/uso de `algoritmos bayesianos predictivos automaticos`.
+
+* Estudio de `modelos de grafos causales`.
+
+
+
