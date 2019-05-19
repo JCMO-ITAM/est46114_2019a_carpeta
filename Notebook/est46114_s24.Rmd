@@ -1,5 +1,5 @@
 ---
-title: "Sesion 24 - Datos Categoricos y Modelos de Grafos Probabilisticos Parte 7/"
+title: "Sesion 24 - Datos Categoricos y Modelos de Grafos Probabilisticos Parte 7/7"
 author:
 -  Juan Carlos Martínez-Ovando
 -  Maestría en Ciencia de Datos
@@ -205,17 +205,17 @@ La `longitud del ciclo` es el numero de `bordes` en la `trayectoria`.
 
 ## Ejemplos
 
-*  `Grafo triangulado`
+*  `Grafo no triangulado`
 
 ```{r}
-gt <- ug(~1:2+2:3:4+3:4:5:6+6:7) 
+gt <- ug(~ 1:2 + 2:3:4 + 3:4:5:6 + 6:7) 
 plot(gt, "circo")
 ```
 
-* `Grafo no triangulado`
+* `Grafo triangulado`
 
 ```{r}
-gnt <- ug(~1:2:5+2:3:5+3:4:5+4:1:5)
+gnt <- ug(~1:2:5 + 2:3:5 + 3:4:5 + 4:1:5)
 plot(gnt,"circo")
 ```
 
@@ -238,7 +238,7 @@ plot(dg.g)
 
 Pero el modelo con la `clase generadora` 
 $$
-\mathcal{C}_2=\{ \{1,2\}, \{1,3\}, \{1,2,4\} \},
+\mathcal{C}_2=\{ \{1,2\}, \{1,3\}, \{2,3,4\} \},
 $$
 no es `grafico`. 
 

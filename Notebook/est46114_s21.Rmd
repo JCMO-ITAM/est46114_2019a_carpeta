@@ -1,5 +1,5 @@
 ---
-title: "Sesion 21 - Datos Categoricos y Modelos de Grafos Probabilisticos Parte 4/"
+title: "Sesion 21 - Datos Categoricos y Modelos de Grafos Probabilisticos Parte 4/7"
 author:
 -  Juan Carlos Martínez-Ovando
 -  Maestría en Ciencia de Datos

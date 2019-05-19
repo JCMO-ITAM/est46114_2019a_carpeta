@@ -1,5 +1,5 @@
 ---
-title: "Sesion 18 - Datos Categoricos y Modelos de Grafos Probabilisticos Parte 1/"
+title: "Sesion 18 - Datos Categoricos y Modelos de Grafos Probabilisticos Parte 1/7"
 author:
 -  Juan Carlos Martínez-Ovando
 -  Maestría en Ciencia de Datos
