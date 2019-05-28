@@ -1,0 +1,136 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+```{r}
+library(tidyverse)
+```
+
+
+```{r}
+#polling_extra <- read_csv("datos/us-pres-state-polling-2004-2016-extra.csv")
+polling <- read_csv("us-pres-state-polling-2004-2016.csv")
+voting <- read_csv("us-pres-state-voting-2004-2016.csv")
+```
+
+```{r}
+polling <- polling[,2:20]
+voting <- voting[,2:10]
+```
+
+## Crear variables
+
+Asignamos una nueva variable de tiempo antes de la elección que mapea la variable de **mean_days_to_election** a una nueva variable categórica **tiempo_antes_de_la_eleccion** que está definida en bloques 5 días.
+
+```{r}
+# Definimos la función para mapear variables
+asignar_cubeta_tiempo <- function(tiempo_medio){
+  cubeta <- ifelse(tiempo_medio <= 5, 5,
+                   ifelse(tiempo_medio <= 10,10,
+                          ifelse(tiempo_medio <= 15, 15,
+                                 ifelse(tiempo_medio <= 20,20,
+                                        ifelse(tiempo_medio <= 25,25,
+                                               ifelse(tiempo_medio <= 30,30,
+                                                      ifelse(tiempo_medio <= 35,35,
+                                                             ifelse(tiempo_medio <= 40,40,
+                                                                    ifelse(tiempo_medio <= 45,45,
+                                                                           ifelse(tiempo_medio <= 50,50,NA))))))))))
+  cubeta
+}
+```
+
+```{r}
+# Creamos la nueva variable tiempo_antes_de_la_eleccion
+polling_limpia <- polling %>% 
+  mutate(mean_days_to_election_limpia = ifelse(is.na(mean_days_to_election),
+                                               end_days_to_election, 
+                                               mean_days_to_election),
+         tiempo_antes_de_la_eleccion = asignar_cubeta_tiempo(mean_days_to_election_limpia),
+         state_id = as.numeric(factor(state)),
+         result_id = as.numeric(factor(result_margin6)))
+```
+
+TODAS LAS VARIABLES 
+
+```{r}
+polling_limpia
+```
+
+```{r}
+tabla_contingencia <- polling_limpia %>%
+  mutate(result_id = as.integer(result_id),
+         year_id = as.integer(year_id),
+         state_id = as.integer(state_id),
+         pollster_id = as.integer(pollster_id),
+         tiempo_antes_de_la_eleccion = as.integer(tiempo_antes_de_la_eleccion)) %>%
+  select(result_id,year_id,state_id, pollster_id) %>%
+  group_by(result_id,year_id,state_id, pollster_id) %>% 
+  summarise(freq = n()) %>% 
+  mutate(freq = as.double(freq))%>%
+  ungroup()
+
+sum(tabla_contingencia$freq)
+```
+
+```{r}
+tabla_contingencia <- as.data.frame(tabla_contingencia)
+str(tabla_contingencia)
+```
+
+```{r}
+suppressMessages(library("bayesloglin"))
+```
+
+
+```{r}
+model.graf <- MC3(init = NULL, 
+                alpha = 1, 
+                iterations = 5, 
+                replicates = 1,
+                data = tabla_contingencia, 
+                mode = "Graphical")
+```
+
+```{r}
+head(model.graf)
+```
+
+```{r}
+tabla_contingencia <- tabla_contingencia %>% 
+  mutate(
+    X1 = as.integer(result_id),
+    X2 = as.integer(year_id),
+    X3 = as.integer(state_id),
+    X4 = as.integer(pollster_id)
+  )%>%
+  select(X1, X2, X3, X4, freq)
+```
+
+```{r}
+str(tabla_contingencia)
+```
+
+
+```{r}
+#f<-formula(X1 + X2 + X3 + X4 ~ freq)
+#model.opt <- gibbsSampler(f,  alpha = 1,data = tabla_contingencia[1:5858,1:5], nSamples = 5, verbose = T)
+```
+
+
+```{r}
+#class(tabla_contingencia)
+```
+
+```{r}
+
+```
+
+
+
+
+
+
+
+

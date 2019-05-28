@@ -1,0 +1,322 @@
+---
+title: "Documento Ejecutivo - Estadística multivariada"
+author: "Luis Federico Puente 103108"
+date: "May 23, 2019"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r echo=FALSE , results='hide', message=FALSE , warning=FALSE}
+library(dplyr)
+library(tidyr)
+```
+
+```{r echo=FALSE , results='hide', message=FALSE , warning=FALSE}
+polling <- read.csv("./us-pres-state-polling-2004-2016.csv", header=TRUE)
+polling_extre<- read.csv("./us-pres-state-polling-2004-2016-extra.csv", header=TRUE)
+```
+
+```{r echo=FALSE , results='hide', message=FALSE , warning=FALSE}
+summary(polling$mean_days_to_election)
+
+polling$mean_days_to_election[is.na(polling$start_days_to_election) & !is.na(polling$end_days_to_election) ] <- polling$end_days_to_election
+
+polling$mean_days_to_election[!is.na(polling$start_days_to_election) & is.na(polling$end_days_to_election) ] <- polling$start_days_to_election
+
+polling$tiempo[polling$mean_days_to_election<=5] <- "Day0-5"
+polling$tiempo[polling$mean_days_to_election>5  & polling$mean_days_to_election<=10] <- "Day5-10"
+polling$tiempo[polling$mean_days_to_election>10 & polling$mean_days_to_election<=15] <- "Day10-15"
+polling$tiempo[polling$mean_days_to_election>15 & polling$mean_days_to_election<=20] <- "Day15-20"
+polling$tiempo[polling$mean_days_to_election>20 & polling$mean_days_to_election<=25] <- "Day20-25"
+polling$tiempo[polling$mean_days_to_election>25 & polling$mean_days_to_election<=30] <- "Day25-30"
+polling$tiempo[polling$mean_days_to_election>30 & polling$mean_days_to_election<=35] <- "Day30-35"
+polling$tiempo[polling$mean_days_to_election>35 & polling$mean_days_to_election<=40] <- "Day35-40"
+polling$tiempo[polling$mean_days_to_election>40 ] <- "Day40ymas"
+```
+
+```{r echo=FALSE , results='hide', message=FALSE , warning=FALSE}
+table(polling$result_margin6)
+table(polling$state)
+table(polling$tiempo)
+```
+
+```{r echo=FALSE , results='hide', message=FALSE , warning=FALSE}
+datos <- select(polling, result_margin6, state, tiempo)
+datos.tc <- table(datos)
+datos.tc
+sum(datos.tc)
+datos.tc<-as.data.frame(datos.tc)
+datos.tc<- filter(datos.tc, Freq!=0)
+
+datos.tc$result_margin6<-as.integer(datos.tc$result_margin6)
+datos.tc$state<-as.integer(datos.tc$state)
+datos.tc$tiempo<-as.integer(datos.tc$tiempo)
+```
+
+## 1. Introducción
+
+Durante los últimos años los resultados de las elecciones en Estados Unidos de América (EUA), así como las encuestas de dichas elecciones han generado gran expectativa en el mundo académico. Por ejemplo, en cuantificar el efecto de dichas encuestas en la intención de voto de las personas.
+
+En este sentido, el objetivo de este documento es analizar los siguientes puntos:
+
+1) Evaluar si la intención de voto es independientemente inducida por la cercanía al día de la elección. En términos estadísticos se busca conocer la interacción/comovimiento/dependencia entre la ambas variables.
+
+2) Evaluar si la edición de la elección tiene algún efecto en el punto previo.
+
+
+## 2. Descripción de los modelos y relevancia para los datos
+
+### Tabla de contingencia
+
+El primer paso que realiza es generar la tabla de contingencia asociada a los datos de las encuestas de EUA.
+
+Para un conjunto de datos de $J$ `variables/dimensiones`, donde cada dimension contiene $K_j$ categorias, $\mathcal{X}_j=\{1,\ldots,K_j\}$, la `tabla de contingencia` $J$-dimensional se define como el arreglo $J$-dimensional
+$$
+T_J=\left(n_{e(1),\ldots,e(J)}\right),
+$$
+donde 
+$$
+e(j)\in \mathcal{X}_j,
+$$
+para $j=1,\ldots,J$.
+
+Es decir, cada dimension $j$ del arreglo contiene $K_j$ entradas.
+
+Además, se cumple que
+$$
+n=\sum_{\{e(1),\ldots,e(J)\}}n_{e(1),\ldots,e(J)},
+$$
+donde 
+$$
+n_{e(1),\ldots,e(J)} = \#\{x_i:x_{i1}=e(1),\ldots,x_{iJ}=e(J)\},
+$$
+donde $x_i$s corresponden a los vectores $J$-dimensionlaes que componen los $n$ datos, con
+$$
+x_i=(x_{i1},\ldots,x_{iJ}).
+$$
+Para el caso concreto de las elecciones en EUA se utilizan las sigientes dimensiones con sus respectivas entradas, esta fue la forma de agrupar los datos:
+
+* Variable 1 (result_margin6). Toma 3 valores: Strong Rep, Strong Dem y Close margin
+
+* Variable 2 (state). Toma 50 valores relacionados con los estados de EUA
+
+* Variable 3 (tiempo). Toma 9 valores de acuerdo a la cercanía del día del levantamiento de la encuesta y el día de la elección, cada intervalo se seleccinó considerando aproximadamente 5 días
+
+Cabe destacar que uno de lo principales propositos del uso de `tablas de contingencia` es analizar las `interacciones` o `comovimientos` o `dependencia` entre las $X_j$s (en todos sus categorias). En el caso del ejemplo de las elecciones en EUA: evaluar si la intención de voto en polling por estado es independientemente inducida por el tiempo de duración para el día de la elección. Es decir, dos de las dimensiones del modelo.
+
+Para el caso de las elecciones se sigue la siguiente notación:
+
+* Denotaremos el conjunto de `vertices` como $$V=\{1,2,3\},$$ correspondientes a las tres `dimnesiones/variables` $$\{Intención de voto, estado de EUA,días previos a la elección\}.$$
+
+* El `vector aleatorio discreto`, $X_i$, es denotado por $$X_i=(X_{i,v}:v\in V),$$
+para $i=1,\ldots, n=490$. Este valor de 490 corresponde al número de combinaciones entre las tres dimensiones que tuvieron frecuencia positiva. 
+
+* La `configuracion` de $X_i$, que se refiere a las categorias especificas de la observacion $i$, se denota como $$x_{i}=(x_{i,v}:v\in V),$$ donde cada $$x_j=e(j)\in \mathcal{X}_j,$$ para $j=1,\ldots,J=3$.
+
+* Los `conteos` son las entradas de la `tabla de contingencia`, y corresponden a los casos
+$$
+n_{e(1),e(2),e(3)}=\#\{x_{i,v}:x_{i,1}=e(1),x_{i,2}=e(2),x_{i,3}=e(3)\}.
+$$
+
+* La `probabilidad` de que una observacion $X_v$ sea igual a $e(v)=(e(1),\ldots,e(J))$ es denotada por 
+$$
+\theta_v=p(x_{v})=\mathbb{P}(X_{v}=x_v)=\mathbb{P}(X_1=e(1),\ldots,X_J=e(J)).
+$$
+
+La tabla de contingencia para el caso de las elecciones de EUA quedo definida de la siguiente forma
+
+```{r}
+head(datos)
+```
+
+### Especificación del modelo loglineal
+
+La especificación del modelos sigue una forma loglineal para estimar las `probabilidades`:
+$$
+\log \theta_v = \alpha^0 + \alpha^{12}_{e(1,2)} + \alpha^{23}_{e(2,3)} + \alpha^{13}_{e(1,3)},
+$$
+donde $\alpha^{jk}_{e(j,k)}$ corresponde a un factor particular para las `dimensiones` $\{jk\}$, con $j,k=1,\ldots,J=3$, y sus correspondientes `categorias` $\{e(j),e(k)\}$.
+
+## 3. Descripción del método de agregación
+
+La forma en la que se agruparon los datos fue la siguiente:
+
+- Variable 1 (result_margin6). Toma 3 valores: Strong Rep, Strong Dem y Close margin
+
+- Variable 2 (state). Toma 50 valores relacionados con los estados de EUA
+
+- Variable 3 (tiempo). que toma 9 valores de acuerdo a la cercanía del día del levantamiento de la encuesta y el día de la elección, cada intervalo se seleccinó considerando aproximadamente 5 días
+
+Cabe destacar que en la base original de las elecciones de la elección existían valores perdidos (NA's) en la variable de dias medios para la elección. En estos casos, y con el objetivo de no perder información, se utilizó la información dispoble de el inicio o término del día del levantamiento de la encuesta.
+
+## 4. Descripción del procedimiento de estimación
+
+Para realizar las estimaciones se utilizó el algorítmo MC3 que utiliza la forma log-lineal en el modelo para encontrar la mejor probabilidad posterior.
+
+Adicionalmente, con el objetivo de cuantificar el efecto de la edición (año) se calculo este modelo condicionando la estimación los años de la elección, con el objetivo de comparar/contrastar los resultados.
+
+Para realizar el cálculo de las `verosimilitudes` y `probabilidades` se utilizó la libreria `bayesloglin` de R, de la siguiente forma:
+
+```{r results='hide', message=FALSE , warning=FALSE}
+suppressMessages(library("bayesloglin"))
+model.graf <- MC3 (init = NULL, 
+                alpha = 1, 
+                iterations = 5000, 
+                replicates = 1,
+                data = datos.tc, 
+                mode = "Graphical")
+```
+
+## 5. Resultados
+
+A continuación se muestra una tabla en la que es posible apreciar los generadores especificos mas importantes (i.e. con mayor probabilidad):
+
+```{r message=FALSE , warning=FALSE}
+head(model.graf, n = 10)
+```
+
+Los resultados inferenciales para el `mejor modelo`, correspondiente al generador
+$$
+\mathcal{C}^*=\left\{\{intención de voto,estado\},\{cercanía a la elección\}\right\}
+$$
+
+Es decir, que existe una fuerte interacción entre las variables intensión de voto y estado de EUA, además de que cercanía al día la elección también es relevante pero independiente de las primeras dos variables.
+
+Para calcular la media posterior se utilizó la función `findPostMean`, que para los modelos descomponibles, se conoce en forma cerrada.
+
+```{r, message=FALSE , warning=FALSE }
+library(bayesloglin)
+
+colnames(datos.tc)[4] <- "freq"
+sum(datos.tc$freq)
+
+formula <- freq  ~ result_margin6 + state + tiempo
+
+s <- findPostMean (formula, alpha = 1, data = datos.tc)
+print(s)
+```
+
+Adicionalmente, tambien se avaluó el mismo modelo pero condicionando para el año de la eleción. Esto con la intensión de analizar si a lo largo del tiempo ha variado la interacción entre la intensión de voto considerando la cercanía de la elección. A continuación, se muestran los resultados para cada año.
+
+### Resultados por año (2004, 2008, 2012 y 2016)
+
+Para 2004:
+```{r echo=FALSE , results='hide', message=FALSE , warning=FALSE}
+
+datos <- select(filter(polling,year=="2004"), result_margin6, state, tiempo)
+datos.tc <- table(datos)
+datos.tc<-as.data.frame(datos.tc)
+datos.tc<- filter(datos.tc, Freq!=0)
+datos.tc$result_margin6<-as.integer(datos.tc$result_margin6)
+datos.tc$state<-as.integer(datos.tc$state)
+datos.tc$tiempo<-as.integer(datos.tc$tiempo)
+
+suppressMessages(library("bayesloglin"))
+model.graf <- MC3 (init = NULL, 
+                alpha = 1, 
+                iterations = 1000, 
+                replicates = 1,
+                data = datos.tc, 
+                mode = "Graphical")
+```
+
+```{r echo=FALSE, message=FALSE , warning=FALSE}
+head(model.graf, n = 10)
+```
+
+Para 2008:
+```{r echo=FALSE , results='hide', message=FALSE , warning=FALSE}
+
+datos <- select(filter(polling,year=="2008"), result_margin6, state, tiempo)
+datos.tc <- table(datos)
+datos.tc<-as.data.frame(datos.tc)
+datos.tc<- filter(datos.tc, Freq!=0)
+datos.tc$result_margin6<-as.integer(datos.tc$result_margin6)
+datos.tc$state<-as.integer(datos.tc$state)
+datos.tc$tiempo<-as.integer(datos.tc$tiempo)
+
+suppressMessages(library("bayesloglin"))
+model.graf <- MC3 (init = NULL, 
+                alpha = 1, 
+                iterations = 1000, 
+                replicates = 1,
+                data = datos.tc, 
+                mode = "Graphical")
+```
+
+```{r echo=FALSE, message=FALSE , warning=FALSE}
+head(model.graf, n = 10)
+```
+
+Para 2012:
+```{r echo=FALSE , results='hide', message=FALSE , warning=FALSE}
+
+datos <- select(filter(polling,year=="2012"), result_margin6, state, tiempo)
+datos.tc <- table(datos)
+datos.tc<-as.data.frame(datos.tc)
+datos.tc<- filter(datos.tc, Freq!=0)
+datos.tc$result_margin6<-as.integer(datos.tc$result_margin6)
+datos.tc$state<-as.integer(datos.tc$state)
+datos.tc$tiempo<-as.integer(datos.tc$tiempo)
+
+suppressMessages(library("bayesloglin"))
+model.graf <- MC3 (init = NULL, 
+                alpha = 1, 
+                iterations = 1000, 
+                replicates = 1,
+                data = datos.tc, 
+                mode = "Graphical")
+```
+
+```{r echo=FALSE, message=FALSE , warning=FALSE}
+head(model.graf, n = 10)
+```
+
+Para 2016:
+```{r echo=FALSE , results='hide', message=FALSE , warning=FALSE}
+
+datos <- select(filter(polling,year=="2016"), result_margin6, state, tiempo)
+datos.tc <- table(datos)
+datos.tc<-as.data.frame(datos.tc)
+datos.tc<- filter(datos.tc, Freq!=0)
+datos.tc$result_margin6<-as.integer(datos.tc$result_margin6)
+datos.tc$state<-as.integer(datos.tc$state)
+datos.tc$tiempo<-as.integer(datos.tc$tiempo)
+
+suppressMessages(library("bayesloglin"))
+model.graf <- MC3 (init = NULL, 
+                alpha = 1, 
+                iterations = 1000, 
+                replicates = 1,
+                data = datos.tc, 
+                mode = "Graphical")
+```
+
+```{r echo=FALSE, message=FALSE , warning=FALSE}
+head(model.graf, n = 10)
+```
+
+## 6. Comentarios finales
+
+El principal resultado es que en caso de que se agregan los datos de todos los años, los resultados inferenciales para el `mejor modelo`, correspondiente al generador:
+$$
+\mathcal{C}^*=\left\{\{intención de voto,estado\},\{cercania a la elección\}\right\}
+$$
+
+Sin embargo, esta interacción cambia al estimar los modelos segmentando por año, ya que en la mayoría de los casos se obtuvo (salvo en 1 año):
+
+$$
+\mathcal{C}^*=\left\{\{intención de voto\},\{estado\}\{cercania a la elección\}\right\}
+$$
+
+Es decir, el año si tiene una impacto en la interación de variables.
+
+
+## 7. Bibliografia
+
+Bon, J., Joshua and Ballard, Timothy and Baffour, Bernard (2018). Polling bias and undecided voter allocations: US presidential elections, 2004-2016. Journal of the Royal Statistical Society: Series A (Statistics in Society).
+
+Notas del curso de Estadística Multivariada. Profesor: Juan Carlos Martínez Ovando. ITAM. Primavera 2019. 
+
+

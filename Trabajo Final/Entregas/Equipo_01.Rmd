@@ -1,0 +1,634 @@
+---
+title: "EST-46114 Métodos Multivariados y Datos Categóricos Trabajo Final"
+author: "Arantza Ivonne Pineda Sandoval 141194, Dante Ruíz Martínez 183340, Ana Luisa Masetto Herrera 183203"
+output:
+  html_document
+---
+
+#Introducción 
+
+En este proyecto estudiamos las relaciones de dependencia que existen en el contexto de encuestas de tendencias de votos en las ultimas cuatro elecciones de Estados Unidos. Pra lograr este propóposito se utilizan tablas de contingencia y modelos de gráfos probabilísticos y pruebas de hipótesis de independencia. 
+
+En el estudio de Joshua J. Bon. et al(2018) se destaca que en la mayoría de los análisis de encuestas existen sesgos en los resultados que se originan por el tratamiento que se le da a las preferencias de los indecisos. Estos sesgos han sido más aparentes en la última elección del 2016, donde la proporción de indecisos alcanzó una magnitud tan grande que las encuestas no fueron capacez de predecir correctamente el ganador de la elección, en una competencia tan cerrada. 
+
+La siguiente gráfica que se tomó del estudio previamente mencionado, muestra el error absoluto medio de las encuestas por estado contra la media de los votantes indecidos en cada estado, se toman en consideración las elecciones del 2004, 2008, 2012 y 2016. Se puede ver que en el año 2016 donde los resultados por estado fueron muy cerrados y existía una gran proporción de votos indecisos, el error medio absoluto fue muy alto, entre 2% y 4%. 
+
+
+```{r, echo=FALSE}
+knitr::include_graphics("introduccion.jpeg")
+```
+
+Dicho lo anterior, una característica de este proyecto es el tratamiento que se le da a las preferencias de los indecisos. En el estudio se consideran como una categoría más entre las preferencias de voto, es decir, esta variable esta compuesta de tres categorías: Demócrata, Republicano e Indeciso. 
+
+En el proyecto se utiliza la base de datos de este estudio, específicamente, la tabla de polling para estudiar las relaciones de dependencia entre las variables para contestar las siguientes dos preguntas: 
+
+1. Evaluar si la intención de voto en el polling por estado es independientemente inducida por el tiempo de duración para el día de la elección. 
+2. Evaluar si la casa encuestadora es independiente de los resultados de la intención de voto. 
+
+
+
+# 1. Análisis exploratorio de datos
+
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+suppressMessages(library("gRbase"))
+library(tidyverse)
+suppressMessages(library("bayesloglin"))
+library("gRim")
+library(naniar)
+```
+
+## 1.1 Datos polling
+
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+polling <- read_csv("us-pres-state-polling-2004-2016.csv")
+voting <- read_csv("us-pres-state-voting-2004-2016.csv")
+polling <- polling[,2:20]
+voting <- voting[,2:10]
+```
+
+La base de datos polling incluye la siguientes variables: 
+
+```{r,echo=FALSE}
+names(polling)
+```
+
+La base de polling tiene 1905 observaciones y 19 variables
+
+```{r,echo=FALSE}
+dim(polling)
+```
+
+Las primeras 6 observaciones de la base de datos de polling se ve de la siguiente manera.
+
+```{r,echo=FALSE}
+head(polling)
+```
+
+La gráfica siguiente muestra el total de valores faltantes por variable en la base de datos de polling: 
+
+```{r, fig.width=15,echo=FALSE}
+gg_miss_var(polling)
+```
+
+La base de datos de polling tiene NAs en las siguientes variables:
+
+* Undecided 
+* mean_days_to_election
+* start_days_to_election
+
+A continuación, se presenta un breve análisis exploratorio de las variables que nos interesan para contestar las preguntas de interés. 
+
+*Año de Elección*
+```{r,echo=FALSE}
+polling %>% ggplot(aes(x=as.factor(year),fill=factor(year))) + 
+  geom_bar() +
+  ggtitle("Frecuencia del total de encuestas por elección") +
+  xlab("Elección") +
+  ylab("conteo")
+```
+
+Se tienen más encuestas para la elección de 2016 y la que menos tiene es la de 2004. 
+
+*Estado*
+
+```{r, fig.width=15, fig.height=5,echo=FALSE}
+polling %>% ggplot(aes(x=as.factor(state),fill=factor(year))) + 
+  geom_bar() +
+  ggtitle("Frecuencia del total de encuestas por estado") +
+  xlab("Estado") +
+  ylab("conteo") + 
+  theme(axis.text.x = element_text(angle=90))
+```
+
+Los estados con mayor número de encuestas son: Florida, Ohio, Pensilvania, Carolina del Norte y Viginia. Así mismo se observa que no todos los estados tienen el número de encuestas. 
+
+*Casa encuestadora*
+
+```{r, fig.width=15, fig.height=5,echo=FALSE}
+polling %>% ggplot(aes(x=as.factor(pollster_id),,fill=factor(year))) + 
+  geom_bar() +
+  ggtitle("Frecuencia del total de encuestas por casa encuestadora") +
+  xlab("Casa Encuestadora (id") +
+  ylab("conteo") + 
+  theme(axis.text.x = element_text(angle=90))
+```
+
+Se puede ver que la casa encuestadora con mayor número de encuestas es la primera, la cuál agrupa las casas que no tienen nombre. Se puede ver que no todas las casas encuestadoras han hecho encuestas en todas las elecciones. 
+
+A continuación, se muestra un histograma sobre el tamaño de muestra de la encuestas de tendencia del voto en la base de polling.
+
+```{r, fig.width=15, fig.height=5,echo=FALSE}
+polling %>% ggplot(aes(x=sample_size)) + 
+  geom_histogram() + 
+  ggtitle("Distribución del tamaño de muestra de las encuestas de tendencia del voto")
+```
+
+```{r,echo=FALSE}
+quantile(polling$sample_size)
+```
+
+La base de datos muestra diferentes tamaños de muestra para cada una de las encuestas en las base de datos. El rango intercuatílico de los tamaños de muestra está entre 869 encuestas y 545. Es preciso mencionar que hay encuestas con más de 1000 encuestas.
+
+Esta consideración es muy relevante para nuestro proyecto, dado que en el paper se menciona que diferentes tamaños de muestra en las enuestras tienen una relación con el tamaño del error de las prediccions de la intención de voto. En ese sentido es necesario reescalar todas las encuestas para que puedan ser directamente comparables.
+
+# 2. Descripción del Método de Agregación con Justificación 
+
+## 2.1 Preprocesamiento (reescalamiento de votos)
+
+Como se mencionó previamente, es necesario reescalar los votos para no tener sesgo por diferentes tamaños de muestra. Para reescalar se consideraron las variables Dem_poll, Rep_poll y Undecided como número de votos, dado que la suma de estos es mayor a 100 en algunos casos, por lo tanto, no pueden considerarse como proporciones, ya que ni siquiera están considerando el número de personas que no reportaron su preferencia. 
+
+```{r,echo=FALSE}
+a <- polling %>% mutate( 
+  Undecided = ifelse(is.na(Undecided),0,Undecided),
+  muestra_efectiva = Dem_poll + Rep_poll + Undecided) 
+
+a%>% filter(muestra_efectiva > 100) %>%filter(muestra_efectiva > 100)%>%select(Dem_poll, Rep_poll, Undecided, sample_size, muestra_efectiva) %>% arrange(desc(muestra_efectiva))
+```
+
+A continuación, se reescalan las variables utilizando un tamaño de muestra efectiva  y se utilizó el 100 como tamaño base para poner todos los tamaños de la muestra en la misma escala. 
+
+Cabe mencionar que antes se intentó replicar la idea del paper de tomar en cuenta a los indecisos más personas que no compartieron sus preferencias, sin embargo, descartamos esa posibilidad dado que el número de indecisos era dominante en todos los casos, por lo tanto, los resultados obtenidos no iban a ser del todo interesantes. 
+
+```{r,echo=FALSE}
+base_reescalada<- polling %>%
+  mutate( 
+    Undecided = ifelse(is.na(Undecided),0,Undecided),
+    muestra_efectiva = Dem_poll + Rep_poll + Undecided, #Sacar la muestra efectiva (#Democratas + #Republicanos + #Undecided )
+    #NA_voters = sample_size - muestra_efectiva, #Las personas que no decidieron compartir sus votos 
+    #Undecided = Undecided + NA_voters, #Según el artículo los que no compartieron su voto se agregan a los indecisos 
+    proporcion_Dem = Dem_poll/muestra_efectiva, #Se saca la proporción por categoría de votantes: #Dem_poll/muestra_efectiva
+    proporcion_Rep = Rep_poll/muestra_efectiva, #Se saca la proporción por categoría de votantes: #Rep_poll/muestra_efectiva
+    proporcion_Und = Undecided/muestra_efectiva, #Se saca la proporción por categoría de votantes: #(Undecided)/muestra_efectiva
+    reescalar_Dem = round(proporcion_Dem*100,0), #Reescalar a 100 votantes (personas por cada 100 votantes)
+    reescalar_Rep = round(proporcion_Rep*100,0), #Reescalar a 100 votantes 
+    reescalar_Und = round(proporcion_Und*100,0)) #Reescalar a 100 votantes
+```
+
+
+## 2.2 Construir la variable de intención de voto
+
+Dado que las tablas de contingencia trabajan con variables categóricas es necasario dar un tratamiento a las variables de número de votos para los Demócratas, Republicanos e Indecisos. Lo que haremos será mapear estás tres variables a una variable cateórica que toma el valor del partido con mayor proporción de votos al momento de la encuesta. 
+
+La variable categórica toma los siguientes valores:
+
+* 1 si es Demócrata la proporción de votos dominante, 
+* 2 si es Republicano
+* 3 si es Indeciso
+
+```{r,echo=FALSE}
+base_reescalada$partido_favorito <- ifelse(
+  base_reescalada$reescalar_Dem > base_reescalada$reescalar_Rep & base_reescalada$reescalar_Dem> base_reescalada$reescalar_Und, 1,
+  ifelse(base_reescalada$reescalar_Rep > base_reescalada$reescalar_Dem & base_reescalada$reescalar_Rep > base_reescalada$reescalar_Und, 2,3))
+```
+
+A continuación se muestra un resumen de esta nueva variable categórica.
+
+```{r,echo=FALSE}
+base_reescalada %>% ggplot(aes(x=as.factor(year),fill=factor(partido_favorito))) + 
+  geom_bar() +
+  ggtitle("Frecuencia del total de encuestas por partido en cada elección") +
+  xlab("1 = Demócratas, 2 = Republicanos, 3 = Indeciso") +
+  ylab("conteo")
+```
+
+Vemos que en las encuestas predomina el partido Demócrata como ganador en casi todas las encuestas, en el 2004 predominan los republicanos. 
+
+## 2.3 Crear variable de tiempo medio antes de la elección
+
+Asignamos una nueva variable de tiempo antes de la elección que mapea la variable de **mean_days_to_election** a una nueva variable categórica **tiempo_antes_de_la_eleccion** que está definida en bloques 5 días.
+
+```{r,echo=FALSE}
+# Definimos la función para mapear variables (crear cubetas)
+asignar_cubeta_tiempo <- function(tiempo_medio){
+  cubeta <- ifelse(tiempo_medio <= 5, 5,
+                   ifelse(tiempo_medio <= 10,10,
+                          ifelse(tiempo_medio <= 15, 15,
+                                 ifelse(tiempo_medio <= 20,20,
+                                        ifelse(tiempo_medio <= 25,25,
+                                               ifelse(tiempo_medio <= 30,30,
+                                                      ifelse(tiempo_medio <= 35,35,
+                                                             ifelse(tiempo_medio <= 40,40,
+                                                                    ifelse(tiempo_medio <= 45,45,
+                                                                           ifelse(tiempo_medio <= 50,50,NA))))))))))
+  cubeta
+}
+```
+
+```{r,echo=FALSE}
+# Creamos la nueva variable tiempo_antes_de_la_eleccion (asignar valores dentro de la cubeta)
+base_reescalada <- base_reescalada %>% 
+  mutate(mean_days_to_election_limpia = ifelse(is.na(mean_days_to_election),
+                                               end_days_to_election, 
+                                               mean_days_to_election),
+         tiempo_antes_de_la_eleccion = asignar_cubeta_tiempo(mean_days_to_election_limpia))
+```
+
+A continuación se muestra un resumen gráfico de cómo quedo esta variable.
+
+```{r}
+base_reescalada %>% ggplot(aes(x=as.factor(tiempo_antes_de_la_eleccion),fill=factor(year))) + 
+  geom_bar() +
+  ggtitle("Frecuencia de la duración media de las encuestas para la votación en días") +
+  xlab("bloque en días") +
+  ylab("conteo")
+```
+
+Vemos que la mayoría de las observaciones que tenemos son encuestas que se realizan muy próximas a los dìas de las elección 5, 10 y 15 días.
+
+## Convertir variables en factores
+
+Para trabajar con tablas de contingencia y las librerías para los análisis de independencia es necesario convertir las variables de interés en factores para que representen variables categóricas.
+
+```{r}
+base_reescalada <- base_reescalada %>% 
+  mutate(pollster_id = factor(pollster_id),
+         partido_favorito = factor(partido_favorito),
+         year_id = factor(year_id),
+         tiempo_antes_de_la_eleccion = factor(tiempo_antes_de_la_eleccion),
+         state=factor(as.numeric(factor(base_reescalada$state)))
+         )
+```
+
+# 3. Descripción de Modelos y Relevancia para los Datos 
+
+En esta sección se presenta el procedimiento de modelación y pruebas estadísticas para cada una de las preguntas de interés. 
+
+## 3.1 Pregunta 1
+
+**1. Evaluar si la intención de voto en el polling por estado es independientemente inducida por el tiempo de duración para el día de la elección.** 
+
+Las cuatro variables de interés para esta pregunta son partido con mayor intención de voto, estado , año de la elección y tiempo antes de la elección.
+
+* Partido con mayor intención de voto
+
+```{r,echo=FALSE}
+levels(base_reescalada$partido_favorito)
+```
+
+* Estado
+
+```{r,echo=FALSE}
+levels(base_reescalada$state)
+```
+
+* Tiempo antes de la elección (tiempo de duración para el día de la elección)
+
+```{r,echo=FALSE}
+levels(base_reescalada$tiempo_antes_de_la_eleccion)
+```
+
+* Año de elección
+```{r,echo=FALSE}
+levels(base_reescalada$year_id)
+```
+
+Construimos la tabla de contingencia para las cuatro variables de interés, que tiene un soporte de $\chi = 3\times50\times10\times4$. La tabla de contingencia se muestra en forma de probabilidades muestrales.
+
+```{r, include=FALSE}
+pregunta1_df <- base_reescalada %>% select(partido_favorito,state, tiempo_antes_de_la_eleccion, year_id) 
+round(table(pregunta1_df) / sum(table(pregunta1_df)),4)
+```
+
+La tabla de contingencia está organizada en cuatro dimensiones y es difícil mostrarla en el documento, por lo que no se incluye en la impresión. 
+
+Las probabilidades muestrales de cada celda de la tabla de contingencia se interpretan como el siguiente ejemplo:
+
+Para un dato  `dato` $X_{i,v}$ la `probabilidad` de que adopte la
+ $$
+ x_{i,v} = \left(x_{i,1}=\text{republicano (2)},x_{2,1}=\text{alabama (1)},x_{i,3}=\text{5 días antes de la elección (1)}\right),x_{i,4}=\text{edición (4)})
+ $$
+ es
+ $$
+ \mathbb{P}(X_{i,v}=x_{i,v})=\theta_{e(1),e(2),e(3),e(4)} = 0.0462,
+ $$
+con 
+$$
+\begin{eqnarray}
+ e(1) & = & \text{republicano (2)}, \\
+ e(2) & = & \text{alabama (1)}, \\
+ e(3) & = & \text{5 días (1)}. \\
+ e(4) & = & \text{2016 (4)}. \\
+\end{eqnarray}
+$$
+
+Recuperamos la tabla de contingencias en formato de DataFrame para poder utilizar en el algoritmo y en la prueba de hipótesis: 
+
+```{r,echo=FALSE}
+data_tcf_1 <- base_reescalada %>%
+  select(partido_favorito,state, tiempo_antes_de_la_eleccion, year_id) %>%
+  mutate(partido_favorito=as.integer(partido_favorito), 
+         state=as.integer(state), 
+         tiempo_antes_de_la_eleccion = as.integer(tiempo_antes_de_la_eleccion), 
+         year_id = as.integer(year_id))%>%
+  group_by(partido_favorito,state, tiempo_antes_de_la_eleccion, year_id) %>%
+  summarise(freq=n())
+
+data_tcf_1 <- as.data.frame(data_tcf_1)
+head(data_tcf_1)
+```
+
+Cada entrada del DataFrame es una configuración del soporte. 
+
+####3.1.1  Descripción del Procedimiento de Estimación con Justificación 
+
+Idealmente quisiéramos encontrar que el mejor grafo asociado a nuestros datos apriori, sin embargo, esto es muy difícil de saber, por lo que es necesario probar diferentes especificaciones de modelos log-lineales utilizando el algoritmo MC3. Lo que hace el algortimo es encontrar el modelo log-lineal con la mayor probabilidad posterior o que maximice la verosimilitud para los datos en cuestión. 
+
+```{r, warning=FALSE, message=FALSE, include=FALSE}
+model_graf_1 <- MC3 (init = NULL, 
+                alpha = 1, 
+                iterations = 1000, 
+                replicates = 1,
+                data = data_tcf_1, 
+                mode = "Graphical")
+```
+
+Abajo se muestran los seis mejores modelos:
+```{r,echo=FALSE}
+head(model_graf_1)
+```
+
+Se puede observar que el modelo con mayor log-posteior probabilidad es el modelo simple, no obstante, se revisaron las demás configugraciones para identificar modelos con grafos triangulares y no se encontró ninguno. 
+
+El grafo asociados al segundo modelo se muestran enseguida: 
+
+```{r,echo=FALSE}
+knitr::include_graphics("pregunta1.jpeg")
+```
+
+
+Dado que lo que nos interesa analizar es la independencia condicional dado el tiempo antes de la elección, de todas maneras se corren las pruebas de hipótesis condicional al tiempo antes de la elección. 
+
+### 3.1.2 Prueba de Hipótesis 
+
+Primero se realiza una prueba de hipótesis de manera agregada, donde hay evidencia para rechazar la hipótesis nula y decir que efectivamente se cumple la independencia condicional. 
+
+```{r,echo=FALSE}
+data_tc_1 <- table(pregunta1_df)
+ph_1 <- ciTest(data_tc_1, set=c("partido_favorito","state","tiempo_antes_de_la_eleccion"))
+ph_1
+```
+
+
+A continuación se calculan los estadísticos con un nivel del 95% de confianza, con el objetivo de realizar la prueba de hipótesis de forma agregada e individual. 
+
+* Agregado: *No se rechaza la Hipótesis Nula*
+```{r}
+qchisq(.95, df=1481)
+```
+
+* Desagregado 
+
+Caso 1: Rechaza Hipótesis Nula
+Caso 2: Rechaza Hipótesis Nula
+Caso 3: Rechaza Hipótesis Nula
+Caso 4: Rechaza Hipótesis Nula
+
+```{r}
+qchisq(.95, df=98)
+```
+
+Caso 5:Rechaza Hipótesis Nula
+
+```{r}
+qchisq(.95, df=70)
+```
+
+Caso 6: Rechaza Hipótesis Nula
+
+```{r}
+qchisq(.95, df=66)
+```
+
+Caso 7: Rechaza Hipótesis Nula
+
+```{r}
+qchisq(.95, df=58)
+```
+
+Caso 8: *No se rechaza la Hipótesis Nula* 
+Caso 9: *No se rechaza la Hipótesis Nula* 
+
+```{r}
+qchisq(.95, df=78)
+```
+
+Caso 10: Rechaza Hipótesis Nula
+
+```{r}
+qchisq(.95, df=0)
+```
+
+### 3.1.3 Resultados
+
+Considerando el modelo agregado, se ve que el modelo *No se rechaza la Hipótesis Nula*, por lo tanto, no se prueba indpendencia, sin embargo,de manera segregada, hay casos donde esto no se respeta. 
+
+## 3.2 Pregunta 2
+
+**2. Evaluar si la casa encuestadora es independiente de los resultados de la intención de voto.** 
+
+Las cuatro variables de interés para esta pregunta son: partido con mayor intención de voto, casa encuestadora , elección (año) y tiempo antes de la elección.
+
+* Partido con mayor intención de voto
+
+```{r,echo=FALSE}
+levels(base_reescalada$partido_favorito)
+```
+
+* Casa encuestadora
+
+```{r,echo=FALSE}
+levels(base_reescalada$pollster_id)
+```
+
+* Elección
+
+```{r,echo=FALSE}
+levels(base_reescalada$year_id)
+```
+
+*Tiempo antes de la elección 
+
+```{r,echo=FALSE}
+levels(base_reescalada$tiempo_antes_de_la_eleccion)
+```
+
+
+Construimos la tabla de contingencia para las cuatro variables de interes, que tiene un soporte de $\chi = 3\times40\times4\times10$.
+
+```{r, include=FALSE}
+pregunta2_df <- base_reescalada %>% select(partido_favorito,pollster_id, year_id, tiempo_antes_de_la_eleccion) 
+round(table(pregunta2_df) / sum(table(pregunta2_df)),4)
+```
+
+La tabla de contingencia está organizada en cuatro dimensiones dada su extensión no se muestra en el documento ejecutivo. 
+
+Las probabilidades muestrales se interpretan como el siguiente ejemplo:
+
+Para un dato  `dato` $X_{i,v}$ la `probabilidad` de que adopte la
+ $$
+ x_{i,v} = \left(x_{i,1}=\text{democrata (1)},x_{2,1}=\text{survey_monkey (32)}, x_{i,3}=\text{2016 (4)}, x_{i,4}=\text{tiempo antes de la elección (1)}\right),
+ $$
+ es
+ $$
+ \mathbb{P}(X_{i,v}=x_{i,v})=\theta_{e(1),e(2),e(3),e(4)} = 0.0462,
+ $$
+con 
+$$
+\begin{eqnarray}
+ e(1) & = & \text{democrata (1)}, \\
+ e(2) & = & \text{survey_monkey (32)}, \\
+ e(3) & = & \text{2016 (4)}. \\
+ e(4) & = & \text{5 días antes de la elección (1)}. \\
+\end{eqnarray}
+$$
+
+Recuperamos la tabla de contingencias en formato de DataFrame para poder utilizar en el algoritmo y en la prueba de hipótesis: 
+
+```{r,echo=FALSE}
+data.tcf <- base_reescalada %>%
+  select(partido_favorito,pollster_id, year_id, tiempo_antes_de_la_eleccion) %>%
+  mutate(partido_favorito=as.integer(partido_favorito), 
+         pollster_id=as.integer(pollster_id), 
+         year_id = as.integer(year_id), 
+         tiempo_antes_de_la_eleccion = as.integer(tiempo_antes_de_la_eleccion))%>%
+  group_by(partido_favorito,pollster_id, year_id, tiempo_antes_de_la_eleccion) %>%
+  summarise(freq=n())
+
+data.tcf <- as.data.frame(data.tcf)
+head(data.tcf)
+```
+
+Cada entrada del DataFrame es una configuración del soporte. 
+
+### 3.2.1 Descripción del Procedimiento de Estimación con Justificación 
+
+Se prueban diferentes especificaciones utilizando el algoritmo MC3.
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, include=FALSE}
+model.graf <- MC3 (init = NULL, 
+                alpha = 1, 
+                iterations = 1000, 
+                replicates = 1,
+                data = data.tcf, 
+                mode = "Graphical")
+```
+
+Abajo se muestran los seis mejores modelos. 
+
+```{r,echo=FALSE}
+head(model.graf)
+```
+
+Se puede observar que el modelo con mayor log-posteior probabilidad es un modelo donde el partido favorito es condicionalmente independiente de año y tiempo dado la casa encuestadora. Ya que lo que nos interesa es probar si existen dependencias condicionales, nos quedamos ese modelo,  el cuál se ve de la siguiente manera: 
+
+$$X_{\text{intención de voto}} \bigCI(X_\text{año de elecció}, X_\text{tiempo antes de elección})|X_\text{casa encuestadora}$$ 
+
+```{r,echo=FALSE}
+knitr::include_graphics("pregunta2.png")
+```
+
+
+### 3.2.2 Prueba de Hipótesis 
+
+Ahora, se realizan un conjunto de pruebas de hipótesis para verificar estos resultados de manera estadística.
+
+```{r,echo=FALSE}
+data.tc <- table(pregunta2_df)
+ph_2 <- ciTest(data.tc, set=c("partido_favorito","year_id","pollster_id"))
+ph_2
+```
+
+Para poder sacar conclusiones, se calculan los estadísticos con un nivel del 95% de confianza, con el objetivo de realizar la prueba de hipótesis de forma agregada e individual. 
+
+* Agregado: Se rechaza la hipótesis nula 
+```{r}
+qchisq(.95, df=90)
+```
+
+* Desagregado (ordenados por casos dependiendo de sus grados de libertad)
+
+Caso 4 (CNN): *No se rechaza la hipótesis nula* 
+
+Caso 10 (GroveInsight): Se rechaza la hipótesis nula
+
+Caso 19 (MonmouthUniversity): *No se rechaza la hipótesis nula*
+
+```{r}
+qchisq(.95, df=1)
+```
+
+Caso 5 (CNN/Time): *No se rechaza la hipótesis nula*
+
+Caso 9 (GravisMarketing): *No se rechaza la hipótesis nula*
+
+Caso 11 (InsiderAdvantage): *No se rechaza la hipótesis nula*
+
+Caso 12 (Ipsos): *No se rechaza la hipótesis nula*
+
+Cso 27 (Research200): *No se rechaza la hipótesis nula*
+
+Caso 30 (StrategicVision): Se rechaza la hipótesis nula 
+
+Caso 39 (youGov): *No se rechaza la hipótesis nula*
+
+```{r}
+qchisq(.95, df=2)
+```
+
+Caso 28 (Serze&Co): *No se rechaza la hipótesis nula*
+
+```{r}
+qchisq(.95, df=3)
+```
+
+Caso 16 (MaristCollege): Se rechaza la hipótesis nula 
+
+Caso 22 (PublicPolicyPolling): *No se rechaza la hipótesis nula*
+
+Caso 29 (SienaResearchInstitute): *No se rechaza la hipótesis nula*
+
+Caso 34 (UniversityofCincinnati): *No se rechaza la hipótesis nula*
+
+```{r}
+qchisq(.95, df=4)
+```
+
+Caso 1 (0_None): Se rechaza la hipótesis nula 
+
+Caso 3 (ARG): Se rechaza la hipótesis nula 
+
+Caso 14 (LATimes): *No se rechaza la hipótesis nula*
+
+Caso 17 (MasonDixon): *No se rechaza la hipótesis nula*
+
+Caso 24 (Quinnipiac): Se rechaza la hipótesis nula
+
+Caso 25 (Rasmussen): Se rechaza la hipótesis nula
+
+Caso 31 (SuffolkUniversity): *No se rechaza la hipótesis nula*
+
+Caso 33 (SurveyUSA): Se rechaza la hipótesis nula 
+
+Caso 35 (UniversityofNewHampshire): *No se rechaza la hipótesis nula*
+
+```{r}
+qchisq(.95, df=6)
+```
+
+Cuando los grados de libertad son iguales a 0 el estadístico es igual a 0, por lo tanto, *No se rechaza la hipótesis nula*. 
+
+## 3.2.3 Resultados
+
+En la pregunta dos existe independencia condicial a nivel agregado, sin embargo, una vez que se desgloza por casa encontramos que el resultado del agregado no se sostiene en todos los casos. Son 6 casas de 40 que rechazan la hipótesis nula, y por lo tanto hay dependencia entre esas casas encuestadoras y las demás variables: partido, año y tiempo antes de la elección. 
+
+# 4. Comentarios Finales 
+
+Para finalizar el proyecto hay dos puntos que vale la pena recalcar, en primero y en un contexto de contenido del curso, el análisis y construccion de modelos con grafos, es una herramienta muy útil que permite visualizar diferentes escenarios de una situación, visualización que permite indagar con más profundidad en el problema en cuestión. Por ejemplo, de manera agregada aquí se mostró que puede haber independencia condicional, pero de manera desagregada no. Como en el caso de casas encuestadoras. 
+
+
+En segundo lugar, y en el contexto de las elecciones de Estados Unidos, el tener esta información disponible permite analizar el comportamiento a lo largo de los tiempos en relación con las casas encuestadoras y su papel en cada estado. Además, y lo más importante a recalcar como conclusión, es sumamente relevante el número de personas que no reportan sus preferencias o que simplemente no saben bien por quién votar, indicando que conforme pasan los años la participación ciudada y su criterio de votación se ve afectado. 
+
+# 5. Bibliografía 
+
+Bon, J. Ballard, T. and Baffour, B. (2018). Polling bias and undecided voter allocations: US Presidential elections, 2004 - 2016. Journal of the Royal Statistical Society, 1-27.
+
